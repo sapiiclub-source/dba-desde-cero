@@ -1,0 +1,370 @@
+{
+ "nivel": 4,
+ "etiqueta": "Módulo 3",
+ "emoji": "📦",
+ "titulo": "Dónde viven los datos",
+ "descripcion": "Tablespaces, bloques por dentro, índices B*Tree, particionamiento y tu primer incidente de espacio. 7 lecciones.",
+ "lecciones": [
+  {
+   "id": "3.1",
+   "titulo": "La jerarquía: del tablespace al bloque",
+   "paginas": [
+    {
+     "titulo": "El edificio de bodegas",
+     "contenido": "¿Dónde queda guardada exactamente una fila que insertas? La respuesta es una jerarquía de 4 niveles. Analogía: un edificio de bodegas.\n\n| Nivel | Analogía | Qué es |\n|---|---|---|\n| **Tablespace** | un piso del edificio | Espacio lógico con nombre (USERS, DATOS_VENTAS) donde decides guardar tablas |\n| **Segmento** | todo lo de un cliente | El espacio total que ocupa UNA tabla (o un índice) |\n| **Extent** | cada sala asignada | Los \"pedazos\" que se le van entregando al segmento a medida que crece |\n| **Bloque** | el casillero mínimo | El ladrillo de ~8 KB; dentro caben varias filas |\n\nY el piso está construido sobre archivos físicos del disco: los **datafiles** (¿recuerdas la lección 0.4 y la 2.7? Todo conecta)."
+    },
+    {
+     "titulo": "Verlo con tus ojos",
+     "contenido": "En tu laboratorio puedes ver la jerarquía completa con el diccionario (lección 2.8):\n\n```sql\n-- ¿Qué tablespaces existen y sobre qué archivos?\nSELECT tablespace_name, file_name FROM dba_data_files;\n\n-- ¿Cuánto ocupa cada uno de MIS objetos? (segmentos)\nSELECT segment_name, segment_type, bytes/1024 AS kb\nFROM user_segments;\n\n-- ¿En cuántos extents está repartida mi tabla?\nSELECT segment_name, COUNT(*) AS extents\nFROM user_extents GROUP BY segment_name;\n```\n\n💡 Cuando un DBA dice \"se llenó el tablespace\", ahora sabes traducirlo: ese piso no tiene más salas que entregar y sus archivos no pueden crecer más. En la lección 3.6 aprenderás a diagnosticarlo y resolverlo.",
+     "practica": {
+      "instruccion": "Consulta el nombre del tablespace y el nombre de archivo de todos los datafiles (vista dba_data_files, columnas tablespace_name y file_name).",
+      "respuestas": [
+       "select tablespace_name, file_name from dba_data_files"
+      ],
+      "pista": "SELECT col1, col2 FROM dba_data_files;",
+      "ok": "¡Eso! Acabas de mapear los pisos del edificio con sus archivos físicos."
+     }
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Ordena de mayor a menor: ¿cuál es la jerarquía correcta?",
+     "opciones": [
+      "Bloque → extent → segmento → tablespace",
+      "Tablespace → segmento → extent → bloque",
+      "Segmento → tablespace → bloque → extent"
+     ],
+     "correcta": 1,
+     "explicacion": "Piso (tablespace) → lo de un cliente (segmento) → sus salas (extents) → casilleros (bloques)."
+    },
+    {
+     "pregunta": "¿Qué es un segmento?",
+     "opciones": [
+      "Un tipo de índice",
+      "El espacio total que ocupa una tabla o un índice",
+      "Un pedazo de la SGA"
+     ],
+     "correcta": 1,
+     "explicacion": "Cada tabla e índice es un segmento que crece pidiendo extents a su tablespace."
+    },
+    {
+     "pregunta": "\"Se llenó el tablespace\" significa que...",
+     "opciones": [
+      "La RAM se agotó",
+      "No quedan extents disponibles y los datafiles no pueden crecer más",
+      "Hay demasiados usuarios conectados"
+     ],
+     "correcta": 1,
+     "explicacion": "Es un problema de espacio en disco lógico/físico, no de memoria ni de sesiones."
+    }
+   ]
+  },
+  {
+   "id": "3.2",
+   "titulo": "Dentro del bloque: PCTFREE y filas que se mudan",
+   "paginas": [
+    {
+     "titulo": "Anatomía del casillero",
+     "contenido": "Cada bloque (~8 KB) tiene:\n\n- Una pequeña **cabecera** de control (incluye una lista de \"quién está modificando filas aquí\", que será protagonista del Módulo 4).\n- Las **filas**, ocupando el resto.\n- Un porcentaje **reservado vacío a propósito**: el **PCTFREE** (default 10%).\n\n¿Por qué dejar espacio vacío? Porque las filas **engordan**: un UPDATE que llena una columna que estaba vacía hace crecer la fila. El PCTFREE es el espacio de crecimiento."
+    },
+    {
+     "titulo": "Row migration: la mudanza costosa",
+     "contenido": "¿Y si una fila engorda tanto que ya no cabe en su bloque?\n\nOracle la **muda a otro bloque**... pero deja en el original un \"papelito\" con la nueva dirección (porque los índices apuntan a la dirección vieja). Esto es **row migration**, y desde entonces leer esa fila cuesta **el doble**: bloque original → papelito → bloque nuevo.\n\nUnas pocas filas migradas no importan. Miles, en una tabla muy consultada, sí: es un clásico problema de rendimiento silencioso.\n\n🔍 Detectarlo: `ANALYZE TABLE clientes LIST CHAINED ROWS;` y consultar la tabla CHAINED_ROWS.\n🔧 Causarlo (en tu lab, para entender): crea una tabla con `PCTFREE 0`, llénala con filas \"flacas\" y engórdalas con UPDATE. Luego mídelo. Romper para entender, como siempre."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Para qué existe el PCTFREE?",
+     "opciones": [
+      "Para ahorrar disco",
+      "Para reservar espacio en cada bloque para que las filas puedan crecer con UPDATEs",
+      "Para acelerar los SELECT"
+     ],
+     "correcta": 1,
+     "explicacion": "Sin espacio de crecimiento, las filas que engordan se mudan (row migration)."
+    },
+    {
+     "pregunta": "¿Qué es row migration?",
+     "opciones": [
+      "Mover una tabla a otro servidor",
+      "Una fila que ya no cabe se muda a otro bloque dejando un puntero: leerla cuesta el doble",
+      "Exportar filas a Excel"
+     ],
+     "correcta": 1,
+     "explicacion": "El \"papelito\" con la nueva dirección duplica las lecturas. Miles de filas migradas = problema silencioso."
+    },
+    {
+     "pregunta": "¿Qué configuración provoca row migration masiva en tablas muy actualizadas?",
+     "opciones": [
+      "PCTFREE muy bajo (ej: 0)",
+      "Tener índices",
+      "Usar VARCHAR2"
+     ],
+     "correcta": 0,
+     "explicacion": "Sin reserva de crecimiento, cada UPDATE que agranda filas provoca mudanzas."
+    }
+   ]
+  },
+  {
+   "id": "3.3",
+   "titulo": "Índices: la guía telefónica",
+   "paginas": [
+    {
+     "titulo": "El problema y la idea",
+     "contenido": "Buscar un apellido en una guía telefónica **ordenada** toma segundos; en una desordenada, horas.\n\nSin índice, Oracle lee la tabla COMPLETA para encontrar una fila (**full table scan** — lección 1.5 del nivel SQL). Con un millón de filas, dolor.\n\nUn **índice** es una estructura aparte, **ordenada**, que dice: \"este valor está en tal bloque\". Oracle salta directo: 3 o 4 lecturas y listo."
+    },
+    {
+     "titulo": "El B*Tree: por qué siempre son 3-4 saltos",
+     "contenido": "El índice estándar se llama **B*Tree** (árbol balanceado): una raíz, ramas y hojas.\n\nBuscas \"PÉREZ\": la raíz dice \"P está en la rama 3\" → la rama dice \"PE está en la hoja 47\" → la hoja tiene PÉREZ con la dirección exacta de su fila. **Tres saltos.**\n\nLo asombroso: por la matemática de los árboles, da casi igual si la tabla tiene mil o mil millones de filas — la altura del árbol casi nunca pasa de 3-4 niveles. Es la magia de los logaritmos trabajando para ti.\n\n💡 Bonus que ya viviste sin saberlo: las **claves primarias crean su índice automáticamente**. Por eso buscar por PK siempre vuela."
+    },
+    {
+     "titulo": "El costo oculto",
+     "contenido": "Los índices **no son gratis**:\n\n- Cada INSERT debe agregar la entrada al índice (a TODOS los índices de la tabla).\n- Cada UPDATE de una columna indexada debe actualizar el índice.\n- Cada DELETE debe marcarla.\n\nUna tabla con 10 índices hace 10 trabajos extra por cada fila insertada. **Indexar todo hace lentas las escrituras.**\n\nEl arte del DBA: los índices justos. ¿Cuáles? Los que sirven a las búsquedas reales: columnas de los WHERE frecuentes, las FK (importantísimo, lo verás en el Módulo 4), las columnas de JOIN. ¿Cuáles no? Columnas que casi nunca se filtran, o tablas que se escriben mucho y se leen poco."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué buscar por índice toma 3-4 lecturas aunque la tabla tenga mil millones de filas?",
+     "opciones": [
+      "Porque Oracle adivina",
+      "Porque el B*Tree es un árbol de pocos niveles: la altura crece logarítmicamente",
+      "Porque usa toda la RAM"
+     ],
+     "correcta": 1,
+     "explicacion": "Raíz → rama → hoja. Los logaritmos hacen que el árbol casi nunca pase de 3-4 niveles."
+    },
+    {
+     "pregunta": "¿Por qué NO indexar todas las columnas?",
+     "opciones": [
+      "Porque es ilegal",
+      "Porque cada índice agrega trabajo a cada INSERT/UPDATE/DELETE: las escrituras se vuelven lentas",
+      "Porque los índices ocupan RAM"
+     ],
+     "correcta": 1,
+     "explicacion": "Los índices aceleran lecturas pero encarecen escrituras. El arte: los justos."
+    },
+    {
+     "pregunta": "¿Por qué buscar por clave primaria siempre es rápido?",
+     "opciones": [
+      "Porque la PK crea su índice automáticamente",
+      "Porque las PK se guardan en la RAM",
+      "No siempre es rápido"
+     ],
+     "correcta": 0,
+     "explicacion": "Toda PK tiene índice único automático: búsqueda directa garantizada."
+    }
+   ]
+  },
+  {
+   "id": "3.4",
+   "titulo": "El experimento de las 100x",
+   "paginas": [
+    {
+     "titulo": "El lab que te convertirá en creyente",
+     "contenido": "Este experimento, en tu laboratorio, vale más que mil lecturas:\n\n```sql\n-- 1) Tabla con 1 millón de filas\nCREATE TABLE prueba_idx AS\nSELECT level AS id,\n       'CLIENTE_' || level AS nombre,\n       MOD(level, 1000) AS codigo\nFROM dual CONNECT BY level <= 1000000;\n\n-- 2) Buscar SIN índice (cronometra)\nSET TIMING ON\nSELECT * FROM prueba_idx WHERE nombre = 'CLIENTE_777777';\n\n-- 3) Crear el índice\nCREATE INDEX idx_prueba_nombre ON prueba_idx(nombre);\n\n-- 4) La misma búsqueda (cronometra de nuevo)\nSELECT * FROM prueba_idx WHERE nombre = 'CLIENTE_777777';\n```\n\nResultado típico: de **segundos a milésimas**. 100x o más. Documenta tus números: es tu primera evidencia de tuning real.",
+     "practica": {
+      "instruccion": "Crea un índice llamado idx_clientes_ciudad sobre la columna ciudad de la tabla clientes.",
+      "respuestas": [
+       "create index idx_clientes_ciudad on clientes(ciudad)",
+       "create index idx_clientes_ciudad on clientes (ciudad)"
+      ],
+      "pista": "CREATE INDEX nombre_indice ON tabla(columna);",
+      "ok": "¡Perfecto! La guía telefónica de esa columna queda construida."
+     }
+    },
+    {
+     "titulo": "Las trampas que anulan un índice",
+     "contenido": "Tener el índice no garantiza que se use. Los saboteadores clásicos:\n\n1. **Funciones sobre la columna**: `WHERE UPPER(nombre) = 'CAMILA'` NO usa el índice de `nombre` (el índice guarda 'Camila', no 'CAMILA'). Solución: índice de función — `CREATE INDEX ... ON tabla(UPPER(nombre))`.\n2. **LIKE con % al inicio**: `LIKE '%PEREZ'` no puede usar el árbol (¿buscarías en la guía telefónica los apellidos que TERMINAN en \"ez\"? imposible, está ordenada por el inicio).\n3. **Buscar casi toda la tabla**: si tu filtro trae el 80% de las filas, leerla completa ES más eficiente (el full scan no siempre es malo). Quién decide esto es el **optimizador**, que conocerás a fondo más adelante."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "`WHERE UPPER(nombre) = 'CAMILA'` con índice en nombre. ¿Se usa el índice?",
+     "opciones": [
+      "Sí, siempre",
+      "No: la función transforma la columna y el índice normal queda inservible (se necesita un índice de función)",
+      "Solo los martes"
+     ],
+     "correcta": 1,
+     "explicacion": "El índice guarda los valores originales. Función sobre la columna = índice saboteado (salvo function-based index)."
+    },
+    {
+     "pregunta": "¿Por qué `LIKE '%PEREZ'` no puede usar el índice?",
+     "opciones": [
+      "Porque el árbol está ordenado por el INICIO del valor: buscar por el final lo inutiliza",
+      "Porque LIKE está prohibido",
+      "Sí puede usarlo"
+     ],
+     "correcta": 0,
+     "explicacion": "Como buscar en la guía telefónica apellidos que terminen en \"ez\": el orden no ayuda."
+    },
+    {
+     "pregunta": "Tu filtro trae el 80% de las filas de la tabla. ¿Qué es más eficiente?",
+     "opciones": [
+      "Siempre el índice",
+      "El full table scan: para leer casi todo, leer directo es mejor que saltar 800 mil veces",
+      "Ninguno, la consulta es imposible"
+     ],
+     "correcta": 1,
+     "explicacion": "El full scan no es malo en sí: es la herramienta correcta para leer mucho. El optimizador lo decide."
+    }
+   ]
+  },
+  {
+   "id": "3.5",
+   "titulo": "Particionamiento: dividir para reinar",
+   "paginas": [
+    {
+     "titulo": "La idea",
+     "contenido": "Cuando una tabla crece a cientos de millones de filas (ventas de 10 años, por ejemplo), se puede dividir en **particiones** — por ejemplo, una por mes:\n\n```sql\nCREATE TABLE ventas (\n  id NUMBER, fecha DATE, total NUMBER\n)\nPARTITION BY RANGE (fecha)\nINTERVAL (NUMTOYMINTERVAL(1,'MONTH'))\n(PARTITION p_inicial VALUES LESS THAN (DATE '2024-01-01'));\n```\n\nPara quien consulta, sigue siendo **una sola tabla**. Pero por dentro, cada mes es su propio segmento."
+    },
+    {
+     "titulo": "Los dos superpoderes",
+     "contenido": "1. **Partition pruning** (poda): si tu consulta pide `WHERE fecha >= DATE '2026-03-01'`, Oracle **ni siquiera mira** las particiones de los meses anteriores. Consultar 1 mes de una tabla de 10 años cuesta como si la tabla tuviera solo ese mes.\n\n2. **Mantención por trozos**: ¿borrar las ventas de 2019 (50 millones de filas)? Sin particiones: un DELETE de horas generando enormes registros. Con particiones: `ALTER TABLE ventas DROP PARTITION p_2019;` — **un segundo**. Lo mismo para respaldar, mover o comprimir por partes.\n\nTipos que existen (los dominarás en el nivel avanzado): por rango (fechas), por lista (regiones), por hash (repartir parejo), y combinaciones. Regla mental de hoy: tabla gigante con columna de fecha = candidata natural a particionar por rango."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué es el partition pruning?",
+     "opciones": [
+      "Borrar particiones viejas",
+      "Que Oracle ignore las particiones irrelevantes para tu consulta: solo lee lo necesario",
+      "Comprimir la tabla"
+     ],
+     "correcta": 1,
+     "explicacion": "\"Solo pediste marzo: ni miro el resto\". El superpoder de lectura del particionamiento."
+    },
+    {
+     "pregunta": "Borrar 50 millones de filas de un año completo en una tabla particionada por mes es...",
+     "opciones": [
+      "Imposible",
+      "Un DROP PARTITION por mes: segundos en vez de horas",
+      "Igual de lento que un DELETE"
+     ],
+     "correcta": 1,
+     "explicacion": "La mantención por trozos convierte operaciones de horas en instantáneas."
+    },
+    {
+     "pregunta": "Para quien consulta una tabla particionada...",
+     "opciones": [
+      "Debe indicar la partición siempre",
+      "Es transparente: sigue siendo una sola tabla",
+      "Necesita permisos especiales por partición"
+     ],
+     "correcta": 1,
+     "explicacion": "La división es interna. El SQL no cambia; el rendimiento sí."
+    }
+   ]
+  },
+  {
+   "id": "3.6",
+   "titulo": "Gestión de espacio: tu primer incidente real",
+   "paginas": [
+    {
+     "titulo": "ORA-01653: el clásico",
+     "contenido": "Tarde o temprano verás este error:\n\n```\nORA-01653: unable to extend table VENTAS.DETALLE by 128 in tablespace DATOS\n```\n\nTraducción con todo lo que ya sabes: \"la tabla DETALLE pidió un extent más al tablespace DATOS, y el piso no tiene más salas que entregar\".\n\nDiagnóstico:\n```sql\nSELECT tablespace_name,\n       ROUND(SUM(bytes)/1024/1024) AS mb_libres\nFROM dba_free_space\nGROUP BY tablespace_name;\n```",
+     "practica": {
+      "instruccion": "Consulta el espacio libre: tablespace_name y suma de bytes desde dba_free_space, agrupando por tablespace_name. (Usa SUM(bytes) y GROUP BY)",
+      "respuestas": [
+       "select tablespace_name, sum(bytes) from dba_free_space group by tablespace_name"
+      ],
+      "pista": "SELECT col, SUM(bytes) FROM dba_free_space GROUP BY col;",
+      "ok": "¡Eso! GROUP BY del Nivel 1 + diccionario del Nivel 2 = diagnóstico de DBA. Las piezas encajan."
+     }
+    },
+    {
+     "titulo": "Las tres soluciones (y la prevención)",
+     "contenido": "Resolver el ORA-01653, de la más común a la última:\n\n1. **Agrandar el datafile**: `ALTER DATABASE DATAFILE '/ruta/datos01.dbf' RESIZE 10G;`\n2. **Agregar otro datafile** al tablespace: `ALTER TABLESPACE datos ADD DATAFILE '...' SIZE 5G;`\n3. **Autoextend con límite**: que el archivo crezca solo, PERO con techo:\n`ALTER DATABASE DATAFILE '...' AUTOEXTEND ON NEXT 100M MAXSIZE 20G;`\n\n⚠️ Autoextend **sin MAXSIZE** es peligroso: un proceso desbocado puede llenar el disco completo del servidor y tumbar TODO (¿recuerdas `df -h` de M0.4? Por eso se vigila a diario).\n\n🏆 La prevención profesional: un job nocturno (lección 5 del curso) que alerte cuando un tablespace baje del 10% libre **considerando el autoextend**. Llegar antes que el error: eso distingue al DBA senior."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué significa ORA-01653?",
+     "opciones": [
+      "Contraseña incorrecta",
+      "Un objeto pidió crecer y su tablespace no tiene más espacio que entregar",
+      "La RAM se agotó"
+     ],
+     "correcta": 1,
+     "explicacion": "Es el incidente de espacio clásico. Ahora sabes leerlo con la jerarquía de la lección 3.1."
+    },
+    {
+     "pregunta": "¿Por qué autoextend SIN maxsize es peligroso?",
+     "opciones": [
+      "Hace lenta la base",
+      "Un proceso desbocado puede llenar el disco completo del servidor y tumbar todo",
+      "No es peligroso"
+     ],
+     "correcta": 1,
+     "explicacion": "El techo (MAXSIZE) contiene el daño. Crecimiento ilimitado + disco compartido = desastre potencial."
+    },
+    {
+     "pregunta": "¿Qué distingue al DBA senior en el manejo de espacio?",
+     "opciones": [
+      "Resolver el error más rápido",
+      "Llegar ANTES del error: monitoreo con alertas de espacio bajo",
+      "Comprar más discos"
+     ],
+     "correcta": 1,
+     "explicacion": "Prevención > reacción. El job de monitoreo nocturno es tu próximo proyecto del curso."
+    }
+   ]
+  },
+  {
+   "id": "3.7",
+   "titulo": "Checkpoint Módulo 3 + labs",
+   "paginas": [
+    {
+     "titulo": "Los labs del módulo (en tu VM, con snapshot)",
+     "contenido": "1. **El experimento de las 100x** (lección 3.4) completo, documentando los tiempos. Tu primera evidencia de tuning.\n2. **Provoca row migration**: tabla con PCTFREE 0, filas flacas, UPDATEs que las engorden, y detéctala con ANALYZE ... LIST CHAINED ROWS.\n3. **Provoca un ORA-01653**: crea un tablespace chico (10 MB, sin autoextend), llénalo con un INSERT masivo hasta el error, diagnostica con dba_free_space y resuélvelo con RESIZE. Tu primer incidente completo: síntoma → diagnóstico → solución.\n4. **Sabotea tu propio índice**: demuestra con tiempos que UPPER(columna) y LIKE '%texto' lo anulan.\n5. Crea una tabla particionada por mes, llénala con 2 años de datos, y compara el tiempo de consultar un mes vs la tabla equivalente sin particionar."
+    },
+    {
+     "titulo": "Checkpoint",
+     "contenido": "Deberías poder explicar sin mirar:\n\n✅ La jerarquía tablespace → segmento → extent → bloque\n✅ Qué es PCTFREE y cómo el descuido causa row migration\n✅ Por qué el B*Tree resuelve en 3-4 saltos y por qué no se indexa todo\n✅ Las 3 trampas que anulan un índice\n✅ Los 2 superpoderes del particionamiento\n✅ Diagnosticar y resolver un ORA-01653\n\nAl aprobar el quiz desbloqueas el **Módulo 4: la transacción** — el módulo estrella del curso, donde por fin se revelan los misterios acumulados: los bloques sucios que sobreviven apagones, el COMMIT instantáneo, y la bitácora del escribano LGWR. 🎬"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Una tabla de 500 millones de filas con columna fecha, consultada siempre por mes. ¿Qué propones?",
+     "opciones": [
+      "Más RAM",
+      "Particionarla por rango de fecha (pruning + mantención por trozos)",
+      "Borrarla"
+     ],
+     "correcta": 1,
+     "explicacion": "El caso de libro del particionamiento por rango."
+    },
+    {
+     "pregunta": "Una búsqueda por nombre demora 8 segundos en una tabla de 2 millones de filas. ¿Primera hipótesis?",
+     "opciones": [
+      "Falta un índice en esa columna (full scan)",
+      "El servidor está apagado",
+      "Hay demasiados usuarios"
+     ],
+     "correcta": 0,
+     "explicacion": "Segundos para encontrar una fila = olor a full table scan. El experimento de las 100x en la vida real."
+    },
+    {
+     "pregunta": "Las escrituras de una tabla se volvieron lentas y descubres que tiene 14 índices. ¿Qué sospechas?",
+     "opciones": [
+      "Sobran índices: cada INSERT paga 14 trabajos extra",
+      "Faltan más índices",
+      "El PCTFREE está alto"
+     ],
+     "correcta": 0,
+     "explicacion": "Los índices aceleran lecturas y encarecen escrituras. 14 es señal de indexación sin criterio."
+    },
+    {
+     "pregunta": "¿Con qué vista diagnosticas cuánto espacio libre queda por tablespace?",
+     "opciones": [
+      "V$SESSION",
+      "DBA_FREE_SPACE",
+      "USER_TABLES"
+     ],
+     "correcta": 1,
+     "explicacion": "dba_free_space + GROUP BY = el diagnóstico de espacio de cada día."
+    }
+   ]
+  }
+ ]
+}
