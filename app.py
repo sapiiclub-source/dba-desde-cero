@@ -202,16 +202,44 @@ def vista_leccion(niveles, progreso, usuario):
             st.markdown(f"{icono} **Pregunta {i + 1}:** {q['explicacion']}")
         aprobada = correctas / len(quiz) >= APROBACION
         db.guardar_progreso(usuario, lec["id"], correctas, len(quiz), aprobada)
+        idx = next(i for i, l in enumerate(lecciones) if l["id"] == lec["id"])
+        siguiente = lecciones[idx + 1] if idx + 1 < len(lecciones) else None
         if aprobada:
-            st.success(f"¡Aprobado! {correctas} de {len(quiz)} correctas. "
-                       "Se desbloqueó la siguiente lección. 🎉")
+            st.success(f"¡Aprobado! {correctas} de {len(quiz)} correctas. 🎉")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if siguiente and st.button(
+                        f"Siguiente: {siguiente['id']} — {siguiente['titulo']} →",
+                        type="primary", use_container_width=True):
+                    st.session_state.leccion_actual = siguiente["id"]
+                    st.session_state.pagina = 0
+                    st.session_state.pop("quiz_enviado", None)
+                    st.rerun()
+                if not siguiente:
+                    st.balloons()
+                    st.info("¡Completaste todo el contenido disponible! Pronto habrá más módulos.")
+            with col2:
+                if st.button("Mapa", use_container_width=True):
+                    st.session_state.pop("leccion_actual")
+                    st.session_state.pop("quiz_enviado", None)
+                    st.rerun()
         else:
             st.error(f"{correctas} de {len(quiz)}. Necesitas el 70%. "
-                     "Relee la lección y vuelve a intentarlo: devolverse no es perder tiempo.")
-        if st.button("Volver al mapa", use_container_width=True):
-            st.session_state.pop("leccion_actual")
-            st.session_state.pop("quiz_enviado", None)
-            st.rerun()
+                     "Repasar no es perder tiempo: es la única forma de no perderlo.")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button("📖 Repasar la lección y reintentar", type="primary",
+                             use_container_width=True):
+                    for i in range(len(quiz)):
+                        st.session_state.pop(f"quiz_{lec['id']}_{i}", None)
+                    st.session_state.pagina = 0
+                    st.session_state.pop("quiz_enviado", None)
+                    st.rerun()
+            with col2:
+                if st.button("Mapa", use_container_width=True):
+                    st.session_state.pop("leccion_actual")
+                    st.session_state.pop("quiz_enviado", None)
+                    st.rerun()
 
 
 # ------------------------------------------------------------------ main ---
