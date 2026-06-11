@@ -1,0 +1,393 @@
+# -*- coding: utf-8 -*-
+"""Genera contenido/nivel3.json: Nivel 2 — Oracle por dentro (9 lecciones)."""
+import json
+
+L = []
+
+L.append({
+ "id": "2.1", "titulo": "El universo de objetos de Oracle",
+ "paginas": [
+  {"titulo": "Mucho más que tablas", "contenido":
+   "Hasta ahora conoces tablas e índices, pero al abrir SQL Developer verás un árbol con MUCHOS tipos de objetos. "
+   "Este es el mapa del universo (cada uno tendrá su momento de profundidad en el curso):\n\n"
+   "| Objeto | Qué es, en una frase |\n|---|---|\n"
+   "| **Tabla** | Donde viven los datos (filas y columnas) |\n"
+   "| **Vista (VIEW)** | Una consulta guardada con nombre, que se usa como si fuera una tabla |\n"
+   "| **Índice** | La \"guía telefónica\" para encontrar filas rápido |\n"
+   "| **Secuencia (SEQUENCE)** | Una máquina de números únicos (para generar IDs) |\n"
+   "| **Sinónimo (SYNONYM)** | Un \"apodo\" para llamar a un objeto con otro nombre |\n"
+   "| **Vista materializada** | Una consulta guardada CON sus resultados precalculados |\n"},
+  {"titulo": "El universo, parte 2: código y estructura", "contenido":
+   "| Objeto | Qué es, en una frase |\n|---|---|\n"
+   "| **Procedure / Function** | Programas guardados dentro de la base (los dominarás en PL/SQL) |\n"
+   "| **Package** | Caja que agrupa procedures y functions relacionados |\n"
+   "| **Trigger** | Código que se dispara solo ante un evento (un INSERT, por ejemplo) |\n"
+   "| **Usuario / Esquema** | El dueño: cada objeto pertenece a un usuario; el conjunto de objetos de un usuario es su **esquema** |\n"
+   "| **DB Link** | Un \"puente\" para consultar tablas de OTRA base de datos remota |\n"
+   "| **Job (Scheduler)** | Tarea programada (\"corre esto cada noche a las 2:00\") |\n"
+   "| **Tablespace / Datafile** | El piso del edificio y sus archivos físicos (lección 3 del curso PDF; aquí los verás en serio) |\n\n"
+   "💡 Concepto unificador: **esquema = usuario + sus objetos**. Cuando dices `clientes`, Oracle entiende `TU_USUARIO.clientes`. "
+   "Para usar la tabla de otro: `ventas.clientes` (esquema.objeto) — o un sinónimo que te ahorre escribirlo."},
+  {"titulo": "Tres objetos en acción", "contenido":
+   "```sql\n-- VISTA: consulta guardada (no duplica datos: se ejecuta al usarla)\nCREATE VIEW clientes_adultos AS\n  SELECT * FROM clientes WHERE edad >= 18;\nSELECT * FROM clientes_adultos;  -- se usa como tabla\n\n-- SECUENCIA: la máquina de IDs\nCREATE SEQUENCE seq_clientes;\nINSERT INTO clientes (id, nombre)\n  VALUES (seq_clientes.NEXTVAL, 'Pedro');  -- NEXTVAL = dame el siguiente\n\n-- SINÓNIMO: el apodo\nCREATE SYNONYM cli FOR ventas.clientes;\nSELECT * FROM cli;  -- equivale a ventas.clientes\n```\n\n"
+   "Las vistas sirven para simplificar consultas complejas y para **seguridad** (mostrar solo ciertas columnas/filas). "
+   "Las secuencias evitan el clásico problema de \"dos personas tomaron el mismo ID a la vez\". Los sinónimos desacoplan "
+   "nombres (si la tabla se muda de esquema, solo cambias el sinónimo).",
+   "practica": {"instruccion": "Crea una secuencia llamada seq_ventas.",
+                "respuestas": ["create sequence seq_ventas"],
+                "pista": "CREATE SEQUENCE nombre;",
+                "ok": "¡Eso! Una máquina de números únicos lista para generar IDs sin choques."}}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué es una vista (VIEW)?",
+   "opciones": ["Una copia de la tabla con datos duplicados", "Una consulta guardada con nombre que se usa como si fuera una tabla", "Un respaldo"],
+   "correcta": 1,
+   "explicacion": "La vista no duplica datos: ejecuta su consulta al ser usada. Sirve para simplificar y para seguridad."},
+  {"pregunta": "¿Para qué sirve una SEQUENCE?",
+   "opciones": ["Para ordenar resultados", "Para generar números únicos (IDs) sin que dos sesiones choquen", "Para programar tareas nocturnas"],
+   "correcta": 1,
+   "explicacion": "NEXTVAL entrega el siguiente número, garantizado único aunque mil sesiones lo pidan a la vez."},
+  {"pregunta": "¿Qué es un esquema en Oracle?",
+   "opciones": ["Un dibujo de la base", "El conjunto de objetos que pertenecen a un usuario", "Un tipo de tabla"],
+   "correcta": 1,
+   "explicacion": "Esquema = usuario + sus objetos. `ventas.clientes` = la tabla clientes del esquema ventas."},
+  {"pregunta": "¿Qué objeto usarías para consultar una tabla que vive en OTRA base de datos?",
+   "opciones": ["Un DB Link", "Un trigger", "Una secuencia"],
+   "correcta": 0,
+   "explicacion": "El database link es el puente entre bases. Lo usarás mucho en integraciones."}
+ ]
+})
+
+L.append({
+ "id": "2.2", "titulo": "Instancia vs base de datos",
+ "paginas": [
+  {"titulo": "La gran analogía: la biblioteca", "contenido":
+   "Imagina una biblioteca gigante:\n\n"
+   "- Los **libros en las estanterías** = tus datos en archivos del disco (**datafiles**).\n"
+   "- El **mesón** donde los bibliotecarios tienen los libros más pedidos = una zona de RAM llamada **buffer cache**.\n"
+   "- El **equipo de bibliotecarios**, cada uno con su tarea = los **procesos** de Oracle.\n\n"
+   "Y la definición central del nivel:\n\n"
+   "> **Base de datos** = los archivos en el disco (los datos en sí).\n"
+   "> **Instancia** = la memoria + los procesos funcionando (el personal con las luces encendidas).\n\n"
+   "La instancia *abre* la base de datos, como el personal abre la biblioteca cada mañana."},
+  {"titulo": "El encendido en 3 etapas", "contenido":
+   "`STARTUP` no es un botón único; son tres pasos:\n\n"
+   "1. **NOMOUNT** → nace la instancia (memoria + procesos), leyendo su archivo de configuración (**spfile**). "
+   "Aún no tocó ningún dato.\n"
+   "2. **MOUNT** → lee el **control file**: un archivo pequeño que es el \"mapa\" de la base (dónde está cada datafile, "
+   "en qué estado quedó todo). Ya sabe dónde está cada cosa, pero no la abrió.\n"
+   "3. **OPEN** → abre los datafiles, verifica consistencia, y si detecta un apagón previo, **se repara sola**. "
+   "Recién aquí entran los usuarios.\n\n"
+   "¿Por qué importa? Porque muchas tareas de DBA se hacen en etapas intermedias (ciertas recuperaciones se hacen "
+   "en MOUNT, por ejemplo), y porque entender las etapas te dice exactamente qué archivo falta cuando una de ellas falla.",
+   "practica": {"instruccion": "Estás en SQL*Plus como administrador y quieres saber en qué estado está la instancia. Consulta la columna status de v$instance.",
+                "respuestas": ["select status from v$instance"],
+                "pista": "SELECT status FROM v$instance;",
+                "ok": "¡Eso! Verás OPEN, MOUNTED o STARTED según la etapa. Tu primera mirada al interior del motor."}}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué es la instancia?",
+   "opciones": ["Los archivos del disco", "La memoria + los procesos de Oracle funcionando", "Una copia de la base"],
+   "correcta": 1,
+   "explicacion": "Instancia = el personal con las luces encendidas. Base de datos = el edificio con sus archivos."},
+  {"pregunta": "¿Qué lee Oracle en la etapa MOUNT?",
+   "opciones": ["Todos los datos", "El control file: el \"mapa\" de dónde está cada archivo", "El correo del DBA"],
+   "correcta": 1,
+   "explicacion": "En MOUNT conoce el mapa pero aún no abre los datos. Varias recuperaciones se hacen en esta etapa."},
+  {"pregunta": "Tras un corte de luz, ¿quién repara la base al encender?",
+   "opciones": ["El DBA, manualmente, siempre", "Oracle mismo, automáticamente, durante el OPEN", "No se puede reparar"],
+   "correcta": 1,
+   "explicacion": "El crash recovery es automático (verás el mecanismo exacto en el Módulo 4: la bitácora redo)."}
+ ]
+})
+
+L.append({
+ "id": "2.3", "titulo": "El buffer cache: el mesón de la biblioteca",
+ "paginas": [
+  {"titulo": "Oracle casi nunca toca el disco directamente", "contenido":
+   "La **SGA** (*System Global Area*) es el gran bloque de RAM que Oracle reserva al encender. Su pieza estrella es el "
+   "**buffer cache**:\n\n"
+   "Oracle copia los datos del disco a esta memoria en unidades llamadas **bloques** (paquetes de ~8 KB, el \"ladrillo\" "
+   "básico), trabaja sobre las copias, y otro proceso las devuelve al disco después, con calma.\n\n"
+   "- Leer un dato que YA está en el buffer cache = **lectura lógica** (rapidísima).\n"
+   "- Tener que ir al disco = **lectura física** (lenta — ¿recuerdas la regla de oro de la cocina, lección 0.2?).\n\n"
+   "Gran parte del *tuning* (afinar el rendimiento) es lograr más lecturas lógicas y menos físicas."},
+  {"titulo": "Los bloques sucios y la pregunta del millón", "contenido":
+   "Un bloque modificado en memoria pero aún no guardado en disco se llama **bloque sucio** (*dirty*).\n\n"
+   "Y sí: Oracle vive **constantemente** con datos modificados solo en RAM.\n\n"
+   "🤔 Pero espera... ¿la RAM no se borraba al cortarse la luz (lección 0.2)? ¿No es peligrosísimo?\n\n"
+   "Lo sería... si no existiera un mecanismo de protección genial que conocerás en el Módulo 4 (la bitácora **redo**). "
+   "Por ahora, guarda la intriga y este hecho: *modificar en RAM y escribir a disco después* es lo que hace a Oracle "
+   "veloz, y hay una red de seguridad debajo.\n\n"
+   "🧪 Experimento para tu lab: ejecuta la misma consulta grande dos veces seguidas y cronometra. La segunda será mucho "
+   "más rápida. Ya sabes explicar por qué: la primera fue al disco (físicas); la segunda encontró todo en el mesón (lógicas)."}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué es una lectura lógica?",
+   "opciones": ["Leer un dato que ya está en el buffer cache (RAM)", "Leer del disco", "Leer con sentido común"],
+   "correcta": 0,
+   "explicacion": "Lógica = desde memoria (rápida). Física = desde disco (lenta). Menos físicas = más velocidad."},
+  {"pregunta": "¿Qué es un bloque sucio?",
+   "opciones": ["Un bloque con datos erróneos", "Un bloque modificado en RAM que aún no se escribe a disco", "Un bloque corrupto"],
+   "correcta": 1,
+   "explicacion": "\"Sucio\" = pendiente de escribir. Es normal y constante; una red de seguridad (Módulo 4) lo protege."},
+  {"pregunta": "¿Por qué la segunda ejecución de una consulta suele ser más rápida?",
+   "opciones": ["Oracle se acostumbra", "Los bloques ya quedaron en el buffer cache: lecturas lógicas en vez de físicas", "El disco se calienta"],
+   "correcta": 1,
+   "explicacion": "La primera ejecución pagó el viaje al disco; la segunda encuentra todo en el mesón."}
+ ]
+})
+
+L.append({
+ "id": "2.4", "titulo": "La shared pool: la memoria de las instrucciones",
+ "paginas": [
+  {"titulo": "El parse: estudiar antes de ejecutar", "contenido":
+   "Cuando envías un SQL, Oracle debe \"estudiarlo\": ¿está bien escrito? ¿existen las tablas? ¿tienes permiso? "
+   "y lo más caro: diseñar un **plan de ejecución** (la estrategia: ¿busco por índice o leo toda la tabla?).\n\n"
+   "Ese estudio se llama **parse**. La **shared pool** (otra pieza de la SGA) guarda los SQL ya estudiados para reutilizarlos:\n\n"
+   "- SQL nuevo → estudio completo = **hard parse** (caro).\n"
+   "- SQL ya visto, con texto idéntico → reutiliza el plan = **soft parse** (barato)."},
+  {"titulo": "Bind variables: la regla de oro profesional", "contenido":
+   "Compara:\n```sql\nWHERE id = 12345     -- valor \"pegado\" en el texto (literal)\nWHERE id = :x        -- variable (bind variable)\n```\n\n"
+   "Con literales, mil ejecuciones con mil valores distintos son mil SQL \"distintos\" = **mil hard parses**. "
+   "Con la variable, es UN solo SQL ejecutado mil veces = un estudio, mil reutilizaciones.\n\n"
+   "Una aplicación que no usa binds puede poner de rodillas una base entera — y además abre la puerta al ataque "
+   "más famoso contra bases de datos: la **inyección SQL** (texto malicioso \"pegado\" dentro de la consulta).\n\n"
+   "🎤 Doble respuesta de entrevista: las bind variables mejoran **rendimiento** (menos parses) y **seguridad** (sin inyección)."}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué es un hard parse?",
+   "opciones": ["Un error de SQL", "El estudio completo de un SQL nunca visto: caro", "Una consulta muy larga"],
+   "correcta": 1,
+   "explicacion": "Sintaxis + permisos + diseñar el plan. El soft parse reutiliza el trabajo de un SQL idéntico ya estudiado."},
+  {"pregunta": "¿Por qué `WHERE id = :x` es mejor que `WHERE id = 12345`?",
+   "opciones": ["Es más corto", "Permite reutilizar el plan (un parse, mil ejecuciones) y evita inyección SQL", "Los números están prohibidos"],
+   "correcta": 1,
+   "explicacion": "Rendimiento + seguridad en una sola práctica. La regla de oro de las aplicaciones bien hechas."},
+  {"pregunta": "¿Dónde guarda Oracle los planes de ejecución ya estudiados?",
+   "opciones": ["En la shared pool (parte de la SGA)", "En el disco duro del usuario", "En el control file"],
+   "correcta": 0,
+   "explicacion": "La shared pool es la memoria de las instrucciones; el buffer cache, la de los datos."}
+ ]
+})
+
+L.append({
+ "id": "2.5", "titulo": "PGA y redo log buffer: las piezas restantes",
+ "paginas": [
+  {"titulo": "La PGA: memoria privada", "contenido":
+   "La SGA es compartida por todos. Pero además, **cada sesión conectada** recibe su propia memoria de trabajo: la "
+   "**PGA** (*Program Global Area*).\n\n"
+   "Ahí ocurren las operaciones \"personales\": los **ordenamientos** (un ORDER BY gigante), los cruces de tablas en "
+   "memoria, las variables de tus programas.\n\n"
+   "Si una operación no cabe en la PGA, se **desborda a disco** (a un área temporal)... y se vuelve lenta. "
+   "Cuando llegues al nivel de performance, \"¿cabe en memoria o se derrama?\" será una de tus preguntas de diagnóstico."},
+  {"titulo": "El redo log buffer: el borrador de la bitácora", "contenido":
+   "Última pieza de la SGA: un buffer pequeño y circular donde **cada cambio que alguien hace se anota primero** "
+   "como una \"receta del cambio\", antes de pasar al disco.\n\n"
+   "Es la antesala del mecanismo de seguridad más importante de Oracle — la respuesta a la intriga de la lección 2.3 "
+   "(¿cómo sobreviven los bloques sucios a un apagón?). La revelación completa: **Módulo 4**, ya muy cerca.\n\n"
+   "📋 Mapa de la SGA completo:\n"
+   "| Pieza | Guarda |\n|---|---|\n"
+   "| Buffer cache | copias de los datos (bloques) |\n"
+   "| Shared pool | SQL estudiados y sus planes |\n"
+   "| Redo log buffer | el borrador de la bitácora de cambios |\n"
+   "| PGA (aparte, una por sesión) | trabajo privado: ordenamientos, variables |"}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué diferencia a la PGA de la SGA?",
+   "opciones": ["La PGA es privada de cada sesión; la SGA es compartida por todos", "Son lo mismo", "La PGA está en el disco"],
+   "correcta": 0,
+   "explicacion": "SGA = memoria común (datos, planes, bitácora). PGA = el escritorio personal de cada sesión."},
+  {"pregunta": "¿Qué pasa si un ordenamiento gigante no cabe en la PGA?",
+   "opciones": ["Falla siempre", "Se desborda a un área temporal en disco y se vuelve lento", "Se cancela la sesión"],
+   "correcta": 1,
+   "explicacion": "El \"derrame\" a disco es un clásico del diagnóstico de rendimiento que aprenderás a detectar."},
+  {"pregunta": "¿Qué se anota en el redo log buffer?",
+   "opciones": ["Los errores de los usuarios", "La \"receta\" de cada cambio, antes de ir al disco", "Las contraseñas"],
+   "correcta": 1,
+   "explicacion": "Toda modificación deja su receta ahí primero. Es la base del mecanismo estrella del Módulo 4."}
+ ]
+})
+
+L.append({
+ "id": "2.6", "titulo": "El equipo de procesos: los bibliotecarios",
+ "paginas": [
+  {"titulo": "Los 5 que debes conocer como a tu familia", "contenido":
+   "Al encender Oracle nacen varios procesos, cada uno con SU tarea:\n\n"
+   "| Proceso | Apodo | Su única misión |\n|---|---|---|\n"
+   "| **DBWn** | el reponedor | Lleva los bloques sucios del buffer cache al disco, con calma, por lotes |\n"
+   "| **LGWR** | el escribano | Pasa la bitácora (redo) de la memoria al disco. Pieza clave del Módulo 4 |\n"
+   "| **CKPT** | el sincronizador | Marca puntos de control: \"hasta aquí, todo lo de memoria ya está en disco\" |\n"
+   "| **SMON** | el conserje | Tras un apagón, ordena el desastre al encender (recuperación automática) |\n"
+   "| **PMON** | el guardia | Si una sesión muere, libera lo que tenía tomado y deshace lo que dejó a medias |\n\n"
+   "🧠 Adelanto del mito #1 que derribarás en el Módulo 4: cuando un usuario confirma un cambio, ¿quién corre: "
+   "el reponedor (DBWn) o el escribano (LGWR)? La respuesta sorprende a la mayoría de los principiantes.",
+   "practica": {"instruccion": "En la terminal Linux de tu servidor, lista los procesos y filtra los de Oracle (los que contienen ora_).",
+                "respuestas": ["ps -ef | grep ora_", "ps -ef|grep ora_"],
+                "pista": "El comando de procesos + la tubería + el filtro (lo viste en M0.4).",
+                "ok": "¡Eso! Ahí verás a ora_dbw0, ora_lgwr, ora_ckpt, ora_smon, ora_pmon... la familia completa."}},
+  {"titulo": "El portero y los mozos", "contenido":
+   "Faltan dos piezas del equipo:\n\n"
+   "- El **listener** (el portero): un programa que escucha en el puerto **1521** (¡lección 0.6!) las solicitudes de "
+   "conexión nuevas. Si el listener está apagado, NADIE nuevo puede entrar (los ya conectados siguen adentro). "
+   "El clásico \"no puedo conectarme\" empieza por revisarlo.\n"
+   "- Los **procesos servidor** (los mozos): por cada usuario conectado existe un proceso dedicado a atenderlo "
+   "(ejecutar sus consultas, traerle sus datos).\n\n"
+   "Flujo completo de una conexión: tu aplicación toca la puerta (IP + puerto 1521) → el listener la recibe → "
+   "le asigna un proceso servidor → desde ahí conversan directo. El portero solo presenta; no atiende la mesa."}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué hace DBWn (el reponedor)?",
+   "opciones": ["Escribe la bitácora en cada commit", "Lleva los bloques sucios de la memoria al disco, por lotes y con calma", "Recibe las conexiones nuevas"],
+   "correcta": 1,
+   "explicacion": "DBWn escribe DATOS al disco a su ritmo. La bitácora es trabajo del escribano LGWR."},
+  {"pregunta": "El listener está caído. ¿Qué pasa?",
+   "opciones": ["Se borran los datos", "Los conectados siguen trabajando, pero nadie nuevo puede entrar", "La base se apaga"],
+   "correcta": 1,
+   "explicacion": "El portero solo recibe llegadas. Caído el listener: conexiones nuevas imposibles, sesiones existentes intactas."},
+  {"pregunta": "¿Quién deshace el trabajo a medias de una sesión que murió abruptamente?",
+   "opciones": ["PMON, el guardia", "El usuario al volver", "El listener"],
+   "correcta": 0,
+   "explicacion": "PMON limpia: libera bloqueos y deshace lo no confirmado de sesiones muertas."}
+ ]
+})
+
+L.append({
+ "id": "2.7", "titulo": "Los archivos de la base: el universo físico",
+ "paginas": [
+  {"titulo": "¿Qué hay en el disco?", "contenido":
+   "Recuerda la lección 0.4: una base Oracle ES un conjunto de archivos. Aquí está el inventario completo:\n\n"
+   "| Archivo | Qué contiene | Si se pierde... |\n|---|---|---|\n"
+   "| **Datafiles** | los datos (tablas, índices) | recuperas con respaldo (Módulo 10) |\n"
+   "| **Control files** | el \"mapa\" de la base | procedimiento especial; por eso se guardan COPIAS múltiples |\n"
+   "| **Redo logs** | la bitácora de cambios reciente | el peor escenario; también se multiplican en copias |\n"
+   "| **Archived logs** | bitácoras históricas archivadas | pierdes la capacidad de recuperar a ciertos puntos |\n"
+   "| **Spfile** | la configuración de la instancia | se reconstruye fácil (y se respalda) |\n"
+   "| **Password file** | claves de administradores remotos | se regenera |\n\n"
+   "Patrón profesional: los archivos críticos e irreemplazables (control files, redo logs) **se mantienen en copias "
+   "múltiples en discos distintos** (multiplexación). Paranoia bien entendida."},
+  {"titulo": "El alert log: el diario de vida", "contenido":
+   "Hay un archivo más, y es tu lectura diaria obligatoria: el **alert log**. Oracle anota ahí todo lo importante: "
+   "encendidos, apagados, errores (los famosos `ORA-`), cambios de configuración, eventos extraños.\n\n"
+   "¿Recuerdas la lección M0.2? Ya tienes la herramienta:\n```\ngrep ORA- alert_FREE.log\n```\n\n"
+   "Leer el alert log cada mañana es al DBA lo que el estetoscopio al médico: la rutina que detecta problemas "
+   "cuando aún son pequeños. En tu laboratorio, ábrelo después de cada experimento: aprenderás a \"escuchar\" a tu base."}
+ ],
+ "quiz": [
+  {"pregunta": "¿Por qué los control files y redo logs se mantienen en copias múltiples?",
+   "opciones": ["Para que ocupen más disco", "Porque son críticos y difíciles de reemplazar: perderlos duele", "Por costumbre antigua"],
+   "correcta": 1,
+   "explicacion": "Multiplexar lo crítico en discos distintos es paranoia profesional bien entendida."},
+  {"pregunta": "¿Qué es el alert log?",
+   "opciones": ["Una alarma sonora", "El diario de vida de la base: errores, eventos, encendidos", "La lista de usuarios"],
+   "correcta": 1,
+   "explicacion": "Lectura diaria del DBA. grep ORA- sobre él será un reflejo permanente."},
+  {"pregunta": "¿Dónde está la configuración de la instancia (parámetros)?",
+   "opciones": ["En el spfile", "En los datafiles", "En el alert log"],
+   "correcta": 0,
+   "explicacion": "El spfile guarda los parámetros; es lo primero que se lee en el STARTUP (etapa NOMOUNT)."}
+ ]
+})
+
+L.append({
+ "id": "2.8", "titulo": "El diccionario de datos: preguntarle a la base por la base",
+ "paginas": [
+  {"titulo": "Oracle se documenta a sí mismo", "contenido":
+   "Oracle mantiene cientos de **vistas del diccionario de datos**: tablas internas consultables con SQL que describen "
+   "TODO lo que existe en la base. Vienen en tres familias según el alcance:\n\n"
+   "- `USER_...` → **mis** objetos (los de mi esquema). Ej: `USER_TABLES` = mis tablas.\n"
+   "- `ALL_...` → todo lo que **puedo ver** (mío + lo que me compartieron).\n"
+   "- `DBA_...` → **todo lo que existe** (requiere privilegios de administrador).\n\n"
+   "Y la cuarta familia que ya conociste: las `V$...` (*ventanas dinámicas*) muestran el estado **en vivo** del motor: "
+   "`V$SESSION` (quién está conectado y qué hace), `V$INSTANCE`, `V$VERSION`...",
+   "practica": {"instruccion": "Consulta los nombres (columna table_name) de TUS tablas usando la vista correspondiente del diccionario.",
+                "respuestas": ["select table_name from user_tables"],
+                "pista": "SELECT table_name FROM user_tables;",
+                "ok": "¡Exacto! El diccionario responde cualquier pregunta sobre la base... si sabes a qué vista preguntarle."}},
+  {"titulo": "El reflejo profesional", "contenido":
+   "Entrena este hábito desde hoy: antes de buscar en Google \"cómo ver X en Oracle\", pregúntate "
+   "**\"¿en qué vista del diccionario estará?\"**\n\n"
+   "| Pregunta | Vista |\n|---|---|\n"
+   "| ¿Qué tablas tengo? | USER_TABLES |\n"
+   "| ¿Qué columnas tiene esa tabla? | USER_TAB_COLUMNS |\n"
+   "| ¿Qué índices existen? | USER_INDEXES |\n"
+   "| ¿Quién está conectado AHORA? | V$SESSION |\n"
+   "| ¿Qué usuarios existen? | DBA_USERS |\n"
+   "| ¿Cuánto ocupa cada objeto? | DBA_SEGMENTS |\n\n"
+   "💡 Meta-truco: el diccionario también se describe a sí mismo. `SELECT * FROM dictionary WHERE comments LIKE '%index%';` "
+   "te dice qué vistas hablan de índices. La base de datos es su propio manual."}
+ ],
+ "quiz": [
+  {"pregunta": "¿Qué diferencia hay entre USER_TABLES y DBA_TABLES?",
+   "opciones": ["Ninguna", "USER_ muestra mis tablas; DBA_ muestra TODAS las de la base (requiere privilegios)", "DBA_TABLES es más antigua"],
+   "correcta": 1,
+   "explicacion": "USER_ = lo mío; ALL_ = lo que puedo ver; DBA_ = todo. Tres alcances, mismo patrón de nombres."},
+  {"pregunta": "¿Quién está conectado en este momento? ¿Dónde miras?",
+   "opciones": ["V$SESSION", "USER_TABLES", "El alert log"],
+   "correcta": 0,
+   "explicacion": "Las V$ son ventanas al estado en vivo. V$SESSION será una de tus vistas más consultadas de por vida."},
+  {"pregunta": "¿Cuál es el reflejo profesional que entrena esta lección?",
+   "opciones": ["Reiniciar la base ante la duda", "Preguntarse \"¿en qué vista del diccionario estará?\" antes de googlear", "Memorizar las 800 vistas"],
+   "correcta": 1,
+   "explicacion": "La base se documenta a sí misma. Saber preguntarle vale más que memorizar."}
+ ]
+})
+
+L.append({
+ "id": "2.9", "titulo": "Checkpoint Nivel 2 + labs destructivos",
+ "paginas": [
+  {"titulo": "Los experimentos del nivel (en tu VM)", "contenido":
+   "Con snapshot tomado, ejecuta:\n\n"
+   "1. **El encendido por etapas**: STARTUP NOMOUNT → MOUNT → OPEN, consultando `v$instance` entre cada paso.\n"
+   "2. **El experimento del mesón**: consulta grande dos veces, cronometra, explica con tus palabras.\n"
+   "3. **Conoce a la familia**: `ps -ef | grep ora_` e identifica a cada proceso por nombre.\n"
+   "4. **El experimento destructivo** ⚡: mata al escribano (`kill -9` al proceso ora_lgwr). La instancia completa se "
+   "cae — LGWR es vital. Enciende de nuevo y lee en el alert log la recuperación automática del conserje SMON. "
+   "Acabas de presenciar lo que el Módulo 4 te explicará pieza por pieza.\n"
+   "5. **Censo de objetos**: crea una vista, una secuencia y un sinónimo en tu esquema, y luego encuéntralos en "
+   "USER_OBJECTS (columna object_type)."},
+  {"titulo": "Checkpoint", "contenido":
+   "Deberías poder explicar sin mirar:\n\n"
+   "✅ Instancia vs base de datos, y las 3 etapas del encendido\n"
+   "✅ Qué guarda cada pieza de la SGA (buffer cache, shared pool, redo log buffer) y qué es la PGA\n"
+   "✅ La misión de DBWn, LGWR, CKPT, SMON, PMON y el listener\n"
+   "✅ El inventario de archivos de la base y cuáles se multiplexan\n"
+   "✅ Para qué sirven una vista, una secuencia, un sinónimo y un DB link\n"
+   "✅ Las familias USER_/ALL_/DBA_/V$ del diccionario\n\n"
+   "Aprueba el quiz y desbloqueas el **Módulo 3: dónde y cómo viven los datos** (tablespaces, bloques e índices por "
+   "dentro) — la antesala del módulo estrella del curso. 🚀"}
+ ],
+ "quiz": [
+  {"pregunta": "Matas al proceso LGWR. ¿Qué pasa?",
+   "opciones": ["Nada, es opcional", "La instancia completa se cae: el escribano es vital", "Solo se desconecta un usuario"],
+   "correcta": 1,
+   "explicacion": "Sin escribano no hay bitácora segura, y sin bitácora Oracle no puede garantizar nada: prefiere caerse."},
+  {"pregunta": "¿En qué orden ocurre el encendido?",
+   "opciones": ["OPEN → MOUNT → NOMOUNT", "NOMOUNT (instancia) → MOUNT (mapa) → OPEN (datos)", "MOUNT → NOMOUNT → OPEN"],
+   "correcta": 1,
+   "explicacion": "Primero nace el personal, luego lee el mapa, finalmente abre las puertas."},
+  {"pregunta": "Creaste una secuencia y quieres verificar que existe. ¿Dónde la buscas?",
+   "opciones": ["En USER_OBJECTS (o USER_SEQUENCES)", "En el alert log", "En el spfile"],
+   "correcta": 0,
+   "explicacion": "El diccionario registra todo objeto creado. USER_OBJECTS lista los tuyos con su tipo."},
+  {"pregunta": "¿Cuál pieza de la SGA guarda los planes de ejecución y cuál las copias de los datos?",
+   "opciones": ["Shared pool los planes; buffer cache los datos", "Al revés", "Ambas guardan lo mismo"],
+   "correcta": 0,
+   "explicacion": "Shared pool = instrucciones estudiadas. Buffer cache = bloques de datos. El mapa mental del nivel."}
+ ]
+})
+
+nivel2 = {
+  "nivel": 3,
+  "etiqueta": "Nivel 2",
+  "emoji": "🏛️",
+  "titulo": "Oracle por dentro",
+  "descripcion": "El universo completo de objetos (vistas, secuencias, sinónimos, DB links...) y la arquitectura: memoria, procesos, archivos y diccionario. 9 lecciones.",
+  "lecciones": L,
+}
+
+with open("contenido/nivel3.json", "w", encoding="utf-8") as f:
+    json.dump(nivel2, f, ensure_ascii=False, indent=1)
+
+print("Lecciones:", len(L), "| Quiz:", sum(len(l['quiz']) for l in L),
+      "| Prácticas:", sum(1 for l in L for p in l['paginas'] if 'practica' in p))

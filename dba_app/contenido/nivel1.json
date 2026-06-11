@@ -1,0 +1,419 @@
+{
+ "nivel": 1,
+ "etiqueta": "Módulo 0",
+ "emoji": "🧪",
+ "titulo": "Tu laboratorio",
+ "descripcion": "Construye tu propio entorno de práctica: VM con Linux, terminal, PuTTY/SSH, Docker y tu primera base Oracle. 7 lecciones.",
+ "lecciones": [
+  {
+   "id": "M0.1",
+   "titulo": "Tu computador de práctica: la máquina virtual",
+   "paginas": [
+    {
+     "titulo": "¿Por qué necesitas un laboratorio?",
+     "contenido": "No se aprende a ser DBA leyendo: necesitas una base de datos **tuya, que puedas romper sin miedo**. Y jamás se practica en sistemas reales de una empresa.\n\nLa solución: una **máquina virtual (VM)** — un \"computador de mentira\" dentro del tuyo. Un programa llamado **VirtualBox** (gratuito) simula un computador completo, y dentro instalas Linux como si fuera un equipo aparte.\n\n💡 Si lo rompes, lo borras y creas otro. Romper aquí es gratis. Romper en producción cuesta el puesto."
+    },
+    {
+     "titulo": "Paso a paso: crear tu VM",
+     "contenido": "**En tu PC (necesitas ~8 GB de RAM y ~60 GB libres de disco):**\n\n1. Descarga **VirtualBox** desde `virtualbox.org` e instálalo (siguiente, siguiente, finalizar).\n2. Descarga la imagen ISO de **Oracle Linux 8** (desde `yum.oracle.com/oracle-linux-isos.html`) o **Ubuntu Server**. Una ISO es el \"DVD de instalación\" en un archivo.\n3. En VirtualBox: **Nueva** → nombre `lab-dba` → tipo Linux → RAM: **4096 MB** → disco: **50 GB** (dinámico).\n4. Inicia la VM, selecciona la ISO descargada y sigue el instalador (idioma, disco, usuario y contraseña — **anótalos**).\n5. Al terminar verás una pantalla negra pidiendo `login`: **¡felicitaciones, tienes un servidor Linux!**\n\n🧰 Existe un atajo: **snapshots** (Máquina → Tomar instantánea). Es \"guardar partida\": antes de cada experimento peligroso, toma una; si destruyes todo, vuelves atrás en 10 segundos."
+    },
+    {
+     "titulo": "Una nota sobre las alternativas",
+     "contenido": "Hay otra forma más liviana que conocerás en la lección M0.5: los **contenedores (Docker)**. La diferencia:\n\n- **VM** = una casa completa (simula hasta el hardware). Pesada pero idéntica a un servidor real.\n- **Contenedor** = un departamento amoblado (solo empaqueta el programa con lo que necesita). Liviano y rápido.\n\nUsaremos **ambos**: la VM para aprender Linux y los experimentos \"físicos\" (apagones, archivos borrados), y Docker para tener Oracle funcionando en minutos."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué practicar en una máquina virtual y no en un sistema real?",
+     "opciones": [
+      "Porque las VM son más rápidas",
+      "Porque romper en el laboratorio es gratis; romper en producción es gravísimo",
+      "Porque Oracle no funciona en computadores normales"
+     ],
+     "correcta": 1,
+     "explicacion": "El laboratorio existe para romper y aprender sin consecuencias. Nunca se experimenta en producción."
+    },
+    {
+     "pregunta": "¿Qué es un snapshot de la VM?",
+     "opciones": [
+      "Una foto de la pantalla",
+      "Un \"guardar partida\": el estado completo de la VM para volver atrás",
+      "Un respaldo de Oracle"
+     ],
+     "correcta": 1,
+     "explicacion": "El snapshot congela el estado de la VM. Antes de cada experimento destructivo: snapshot. Después: restauras en segundos."
+    },
+    {
+     "pregunta": "¿Cuál describe mejor la diferencia VM vs contenedor?",
+     "opciones": [
+      "VM = casa completa; contenedor = departamento amoblado",
+      "Son exactamente lo mismo",
+      "El contenedor es más pesado que la VM"
+     ],
+     "correcta": 0,
+     "explicacion": "La VM simula un computador entero; el contenedor solo empaqueta un programa con sus dependencias."
+    }
+   ]
+  },
+  {
+   "id": "M0.2",
+   "titulo": "La terminal: tus primeros 10 comandos",
+   "paginas": [
+    {
+     "titulo": "Moverse y mirar",
+     "contenido": "Inicia sesión en tu VM. Ese texto que espera tus órdenes es la **terminal** (o *shell*). Tus primeros comandos:\n\n- `pwd` → ¿en qué carpeta estoy?\n- `ls` → ¿qué hay aquí? (`ls -l` con detalles, `ls -la` incluye ocultos)\n- `cd documentos` → entrar a una carpeta · `cd ..` → subir un nivel · `cd` solo → ir a tu carpeta personal\n\nPractica cada uno 5 veces. La terminal se aprende con los dedos, no con los ojos.",
+     "practica": {
+      "instruccion": "Quieres ver qué archivos hay en la carpeta actual, CON detalles (tamaño, fecha, permisos). ¿Qué comando usas?",
+      "respuestas": [
+       "ls -l",
+       "ls -la",
+       "ls -al"
+      ],
+      "pista": "Es `ls` más una opción que empieza con guion.",
+      "ok": "¡Eso! `ls -l` = lista detallada. Con `-a` además ves los archivos ocultos."
+     }
+    },
+    {
+     "titulo": "Crear, copiar, mover, borrar",
+     "contenido": "- `mkdir pruebas` → crear carpeta\n- `cp archivo.txt copia.txt` → copiar\n- `mv archivo.txt pruebas/` → mover (o renombrar: `mv viejo.txt nuevo.txt`)\n- `rm archivo.txt` → borrar ⚠️ **no hay papelera: lo borrado, borrado está**\n- `cat archivo.txt` → ver el contenido completo · `less archivo.txt` → verlo por páginas (sales con `q`)\n- `nano archivo.txt` → editor simple para modificar archivos",
+     "practica": {
+      "instruccion": "Crea una carpeta llamada `lab`. ¿Qué comando escribes?",
+      "respuestas": [
+       "mkdir lab"
+      ],
+      "pista": "make directory, abreviado.",
+      "ok": "¡Correcto! `mkdir lab`. Ya estás dando órdenes como DBA."
+     }
+    },
+    {
+     "titulo": "Buscar: tu superpoder",
+     "contenido": "`grep` busca texto dentro de archivos. Será tu mejor amigo para revisar los \"diarios de vida\" de Oracle:\n\n- `grep error registro.txt` → muestra las líneas que contienen \"error\"\n- `grep -i error registro.txt` → igual, ignorando mayúsculas/minúsculas\n- `grep ORA- alert.log` → 🔮 *spoiler*: así buscarás errores de Oracle en su bitácora, todos los días de tu carrera\n\nY el truco que une comandos, la **tubería** `|`: la salida de uno entra al siguiente.\n`cat alert.log | grep ORA- | less` = \"muestra el archivo → filtra los errores → páginame el resultado\".",
+     "practica": {
+      "instruccion": "Busca la palabra 'error' (sin importar mayúsculas) dentro del archivo registro.txt.",
+      "respuestas": [
+       "grep -i error registro.txt"
+      ],
+      "pista": "grep, la opción de ignorar mayúsculas, la palabra y el archivo.",
+      "ok": "¡Perfecto! `grep -i` ignora mayúsculas. Acabas de aprender el comando que más usarás en tu vida."
+     }
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué hace `cd ..`?",
+     "opciones": [
+      "Borra la carpeta actual",
+      "Sube un nivel (a la carpeta padre)",
+      "Cierra la terminal"
+     ],
+     "correcta": 1,
+     "explicacion": "`..` significa \"la carpeta de arriba\". `cd ..` te mueve hacia ella."
+    },
+    {
+     "pregunta": "¿Por qué `rm` exige respeto?",
+     "opciones": [
+      "Porque es lento",
+      "Porque en Linux no hay papelera: lo borrado no se recupera",
+      "Porque solo funciona los lunes"
+     ],
+     "correcta": 1,
+     "explicacion": "rm borra definitivo. Los DBA seniors lo escriben despacio y lo leen dos veces antes de Enter."
+    },
+    {
+     "pregunta": "¿Qué hace la tubería `|`?",
+     "opciones": [
+      "Divide la pantalla en dos",
+      "Conecta comandos: la salida de uno es la entrada del siguiente",
+      "Ejecuta el comando dos veces"
+     ],
+     "correcta": 1,
+     "explicacion": "Encadenar comandos con | es el estilo Linux: piezas simples combinadas para tareas poderosas."
+    }
+   ]
+  },
+  {
+   "id": "M0.3",
+   "titulo": "PuTTY y SSH: controlar servidores a distancia",
+   "paginas": [
+    {
+     "titulo": "El problema y la solución",
+     "contenido": "Los servidores reales viven en salas frías sin pantalla ni teclado (o en la nube, a miles de kilómetros). ¿Cómo los controlas? Con **SSH** (*Secure Shell*): un protocolo que abre una **terminal remota cifrada** por la red, en el puerto **22**.\n\nEs decir: desde tu escritorio escribes comandos que se ejecutan **en el servidor**, como si estuvieras sentada frente a él.\n\nEn Windows, el programa clásico para esto es **PuTTY** (gratuito, putty.org). En Mac/Linux, SSH ya viene incluido en la terminal."
+    },
+    {
+     "titulo": "Paso a paso con PuTTY",
+     "contenido": "1. Averigua la IP de tu VM: dentro de ella ejecuta `ip addr` (busca algo como `192.168.x.x`).\n   *Tip VirtualBox*: configura la red de la VM en modo **Adaptador puente** para que tenga IP en tu red local.\n2. Abre PuTTY → en **Host Name** escribe la IP → **Port**: 22 → Connection type: **SSH** → **Open**.\n3. La primera vez te mostrará una huella de seguridad → **Accept** (estás diciéndole \"confío en este servidor\").\n4. `login as:` tu usuario de Linux → contraseña (no se ve mientras escribes: es normal) → **estás dentro**.\n5. Comprueba: `pwd`, `ls`. Todo lo que aprendiste en M0.2 funciona igual... pero remoto.\n\n💾 *Tip pro*: en PuTTY puedes guardar la sesión con nombre (Saved Sessions → Save) para no reescribir la IP cada vez."
+    },
+    {
+     "titulo": "SSH desde cualquier terminal",
+     "contenido": "Desde Mac, Linux, o el PowerShell de Windows moderno, no necesitas PuTTY:\n\n```\nssh usuario@192.168.1.80\n```\n\nSe lee: \"abre una sesión segura como `usuario` en el servidor de esa IP\".\n\nDiagnóstico cuando NO conecta (usa lo aprendido en 0.6):\n1. `ping IP` → ¿el servidor está vivo en la red?\n2. ¿El puerto 22 está abierto? (firewall)\n3. ¿Usuario/contraseña correctos?\n\nEse orden resuelve el 90% de los \"no puedo entrar\".",
+     "practica": {
+      "instruccion": "Conéctate por SSH como el usuario `oracle` al servidor 10.0.0.20. ¿Qué comando escribes?",
+      "respuestas": [
+       "ssh oracle@10.0.0.20"
+      ],
+      "pista": "ssh usuario@ip",
+      "ok": "¡Exacto! `ssh oracle@10.0.0.20`. Así entrarás a los servidores el resto de tu carrera."
+     }
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué es SSH?",
+     "opciones": [
+      "Un editor de texto",
+      "Un protocolo para abrir una terminal remota segura (puerto 22)",
+      "Una marca de servidores"
+     ],
+     "correcta": 1,
+     "explicacion": "SSH = Secure Shell: terminal remota cifrada. PuTTY es el programa clásico de Windows para usarla."
+    },
+    {
+     "pregunta": "Escribes tu contraseña en PuTTY y no aparece nada en pantalla. ¿Qué pasa?",
+     "opciones": [
+      "El teclado está fallando",
+      "Es normal: por seguridad no se muestra nada mientras escribes",
+      "El servidor está caído"
+     ],
+     "correcta": 1,
+     "explicacion": "Linux no muestra ni asteriscos al escribir contraseñas. Escribe y presiona Enter con fe."
+    },
+    {
+     "pregunta": "No puedes conectarte por SSH. ¿Cuál es el PRIMER paso de diagnóstico?",
+     "opciones": [
+      "Reinstalar PuTTY",
+      "`ping` a la IP para ver si el servidor responde en la red",
+      "Cambiar la contraseña"
+     ],
+     "correcta": 1,
+     "explicacion": "Siempre de afuera hacia adentro: ¿hay red? → ¿está abierto el puerto? → ¿credenciales correctas?"
+    }
+   ]
+  },
+  {
+   "id": "M0.4",
+   "titulo": "Los ojos del DBA: observar el sistema",
+   "paginas": [
+    {
+     "titulo": "¿Quién consume qué?",
+     "contenido": "Antes de tocar Oracle, debes saber mirar el computador donde vive. Cuatro comandos serán tus ojos:\n\n- `top` → la \"tabla en vivo\" de procesos: cuánta **CPU** y **RAM** consume cada uno (sales con `q`). ¿Recuerdas la cocina del 0.2? Aquí ves al cocinero y el mesón en tiempo real.\n- `free -m` → cuánta RAM hay, usada y libre (en megabytes).\n- `df -h` → cuánto **disco** queda en cada partición (en formato humano: GB). El comando que evita el clásico \"se llenó el disco y se cayó todo\".\n- `ps -ef` → la lista completa de procesos. Pronto la usarás para ver a la \"familia\" de procesos de Oracle.",
+     "practica": {
+      "instruccion": "Quieres saber cuánto espacio libre queda en los discos, en formato legible (GB). ¿Qué comando usas?",
+      "respuestas": [
+       "df -h"
+      ],
+      "pista": "disk free + opción 'human readable'.",
+      "ok": "¡Correcto! `df -h`. Revisarlo a diario evita la causa #1 de caídas tontas: disco lleno."
+     }
+    },
+    {
+     "titulo": "Combinando lo aprendido",
+     "contenido": "Mira el poder de juntar piezas (M0.2 + M0.4):\n\n```\nps -ef | grep ora_\n```\n\n= \"lista TODOS los procesos → filtra los que contengan `ora_`\". Cuando Oracle esté instalado, ese comando te mostrará a sus procesos (el escribano, el reponedor, el conserje... los conocerás formalmente en el Módulo 2).\n\n📌 Guarda esta tarjeta mental:\n| Pregunta | Comando |\n|---|---|\n| ¿Quién consume CPU/RAM ahora? | `top` |\n| ¿Cuánta RAM queda? | `free -m` |\n| ¿Cuánto disco queda? | `df -h` |\n| ¿Está corriendo el proceso X? | `ps -ef \\| grep X` |"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "El sistema está lentísimo y sospechas que un proceso devora la CPU. ¿Qué comando abres primero?",
+     "opciones": [
+      "df -h",
+      "top",
+      "mkdir"
+     ],
+     "correcta": 1,
+     "explicacion": "`top` muestra en vivo quién consume CPU y RAM, ordenado por consumo."
+    },
+    {
+     "pregunta": "¿Qué te muestra `df -h`?",
+     "opciones": [
+      "El espacio libre y usado de los discos, en GB",
+      "La memoria RAM",
+      "Los usuarios conectados"
+     ],
+     "correcta": 0,
+     "explicacion": "disk free, human readable. El disco lleno es la causa #1 de caídas evitables: vigílalo."
+    },
+    {
+     "pregunta": "¿Qué hace `ps -ef | grep ora_`?",
+     "opciones": [
+      "Borra los procesos de Oracle",
+      "Lista todos los procesos y filtra los de Oracle",
+      "Instala Oracle"
+     ],
+     "correcta": 1,
+     "explicacion": "ps lista procesos; grep filtra. Juntos: \"muéstrame solo los procesos de Oracle\"."
+    }
+   ]
+  },
+  {
+   "id": "M0.5",
+   "titulo": "Instalar Oracle con Docker",
+   "paginas": [
+    {
+     "titulo": "Docker en 2 minutos",
+     "contenido": "**Docker** ejecuta programas en **contenedores**: paquetes listos con todo lo necesario adentro. En vez de instalar Oracle a mano (horas de configuración), descargas su contenedor oficial y lo enciendes en minutos.\n\nInstalación en tu VM (Oracle Linux):\n```\nsudo dnf install -y docker\nsudo systemctl start docker\n```\nPalabras nuevas:\n- `sudo` = \"ejecuta como administrador\" (super user do).\n- `dnf` = el instalador de programas de Oracle Linux.\n- `systemctl start` = enciende un servicio (un programa que corre de fondo)."
+    },
+    {
+     "titulo": "Encender Oracle (línea por línea)",
+     "contenido": "```\ndocker run -d --name oracle-lab -p 1521:1521 \\\n  -e ORACLE_PWD=MiClaveLab123 \\\n  container-registry.oracle.com/database/free:latest\n```\n\nTraducción palabra por palabra:\n- `docker run` → descarga (la primera vez) y enciende un contenedor.\n- `-d` → que corra de fondo (*detached*).\n- `--name oracle-lab` → le ponemos nombre para referirnos a él.\n- `-p 1521:1521` → \"abre el puerto 1521\" (¿lo recuerdas de la lección 0.6? ¡el puerto de Oracle!).\n- `-e ORACLE_PWD=...` → define la contraseña del administrador.\n- la última línea → la \"dirección\" del contenedor oficial de **Oracle Database Free** (la versión gratuita, idéntica en lo esencial a la que usan las empresas).\n\nLa primera vez tarda varios minutos (descarga ~3 GB). Para saber si ya está listo: `docker logs oracle-lab` hasta ver `DATABASE IS READY TO USE!`",
+     "practica": {
+      "instruccion": "Quieres ver qué contenedores están corriendo ahora. ¿Qué comando usas?",
+      "respuestas": [
+       "docker ps"
+      ],
+      "pista": "Es como el `ps` de Linux, pero de docker.",
+      "ok": "¡Eso! `docker ps` lista los contenedores encendidos. Deberías ver tu oracle-lab ahí."
+     }
+    },
+    {
+     "titulo": "Comandos de supervivencia Docker",
+     "contenido": "| Necesito... | Comando |\n|---|---|\n| Ver contenedores corriendo | `docker ps` |\n| Ver el \"diario\" del contenedor | `docker logs oracle-lab` |\n| Apagarlo / encenderlo | `docker stop oracle-lab` / `docker start oracle-lab` |\n| Entrar a SU terminal | `docker exec -it oracle-lab bash` |\n| Borrarlo del todo | `docker rm -f oracle-lab` ⚠️ |\n\n💡 ¿Notas el patrón? Un contenedor es un mini-servidor: tiene sus procesos, su terminal, su diario. Todo lo que aprendiste sigue valiendo adentro."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué significa `-p 1521:1521` en el docker run?",
+     "opciones": [
+      "Define la contraseña",
+      "Abre/publica el puerto 1521, donde atiende Oracle",
+      "Asigna 1521 MB de RAM"
+     ],
+     "correcta": 1,
+     "explicacion": "Publica el puerto del contenedor hacia afuera. Sin esto, nadie podría conectarse a Oracle desde fuera."
+    },
+    {
+     "pregunta": "¿Qué hace `sudo`?",
+     "opciones": [
+      "Ejecuta el comando con permisos de administrador",
+      "Apaga el sistema",
+      "Descarga archivos"
+     ],
+     "correcta": 0,
+     "explicacion": "super user do: necesario para instalar programas o tocar configuración del sistema."
+    },
+    {
+     "pregunta": "¿Cómo sabes que la base de datos del contenedor ya está lista?",
+     "opciones": [
+      "Esperando exactamente 5 minutos",
+      "Mirando `docker logs oracle-lab` hasta ver DATABASE IS READY TO USE",
+      "No se puede saber"
+     ],
+     "correcta": 1,
+     "explicacion": "Los logs son el diario del contenedor. Leer diarios/bitácoras será un reflejo profesional permanente."
+    }
+   ]
+  },
+  {
+   "id": "M0.6",
+   "titulo": "Primera conexión: hola, Oracle",
+   "paginas": [
+    {
+     "titulo": "SQL*Plus: la llave universal",
+     "contenido": "**SQL*Plus** es el programa más básico para conversar con Oracle. Es feo, sin colores ni ayudas... y por eso mismo **está en todos los servidores del planeta**: cuando todo lo demás falle, SQL*Plus estará ahí.\n\nConéctate (desde tu VM):\n```\ndocker exec -it oracle-lab sqlplus system/MiClaveLab123@FREEPDB1\n```\nTraducción: \"dentro del contenedor oracle-lab, abre sqlplus, entra como el usuario `system` con esa contraseña, a la base llamada FREEPDB1\".\n\nSi ves el mensaje `SQL>`... 🎉 **estás dentro de una base de datos Oracle de verdad.**"
+    },
+    {
+     "titulo": "Tus primeras consultas",
+     "contenido": "```\nSELECT sysdate FROM dual;\n```\n= \"muéstrame la fecha y hora del sistema\". (`dual` es una tabla especial de Oracle para este tipo de pruebas; el `;` marca el final de la orden.)\n\n```\nSELECT banner FROM v$version;\n```\n= \"¿qué versión de Oracle eres?\". Las vistas que empiezan con `v$` son \"ventanas\" para mirar dentro del motor: las usarás miles de veces desde el Módulo 2.\n\nPara salir: `exit`",
+     "practica": {
+      "instruccion": "Estás en SQL*Plus. Pídele a Oracle la fecha y hora del sistema.",
+      "respuestas": [
+       "select sysdate from dual"
+      ],
+      "pista": "SELECT algo FROM la tabla especial de pruebas.",
+      "ok": "¡Tu primera consulta SQL real! En el Nivel 1 aprenderás este idioma a fondo."
+     }
+    },
+    {
+     "titulo": "El mapa de lo que construiste",
+     "contenido": "Mira todo lo que conectaste:\n\n**Tu PC** → (PuTTY/SSH, puerto 22) → **VM Linux** → (Docker) → **contenedor Oracle** → (SQL*Plus) → `SQL>`\n\nCada flecha es un concepto que ya dominas: cliente-servidor, IP y puertos, terminal remota, contenedores. Y ese caminito —de tu teclado hasta el corazón de la base— es **exactamente** el que recorre un DBA profesional cada mañana al empezar su día."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué importa SQL*Plus si existen herramientas más bonitas?",
+     "opciones": [
+      "Porque es más rápido que todas",
+      "Porque está en TODOS los servidores: cuando todo falle, estará ahí",
+      "Porque tiene gráficos"
+     ],
+     "correcta": 1,
+     "explicacion": "Las herramientas gráficas pueden no estar disponibles en una emergencia. SQL*Plus siempre está."
+    },
+    {
+     "pregunta": "¿Qué es `dual`?",
+     "opciones": [
+      "Una tabla especial de Oracle, útil para consultas de prueba",
+      "Un error",
+      "El nombre de la base de datos"
+     ],
+     "correcta": 0,
+     "explicacion": "dual existe para consultas que no necesitan datos de una tabla real, como SELECT sysdate FROM dual."
+    },
+    {
+     "pregunta": "¿Qué son las vistas `v$`?",
+     "opciones": [
+      "Tablas de clientes",
+      "\"Ventanas\" para mirar el estado interno del motor Oracle",
+      "Archivos de respaldo"
+     ],
+     "correcta": 1,
+     "explicacion": "v$version, v$instance, v$session... serán tus instrumentos de diagnóstico toda la carrera."
+    }
+   ]
+  },
+  {
+   "id": "M0.7",
+   "titulo": "La regla del laboratorio + checkpoint",
+   "paginas": [
+    {
+     "titulo": "La regla de oro",
+     "contenido": "📜 **Todo lo que aprendas, rómpelo.**\n\n- ¿Aprendiste qué hace un proceso? Mátalo y mira qué pasa.\n- ¿Aprendiste respaldos? Borra un archivo de datos a propósito y recupera.\n- ¿Aprendiste qué pasa en un corte de luz? Apaga la VM de golpe.\n\nEsa es la diferencia entre **saber** y **entender**. Por eso construiste un laboratorio donde romper es gratis (snapshot antes, experimento, restaurar si hace falta).\n\nLos mejores DBAs del mundo no son los que nunca rompieron nada: son los que rompieron TODO... en el lugar correcto."
+    },
+    {
+     "titulo": "Checkpoint del Módulo 0",
+     "contenido": "Deberías poder, sin mirar apuntes:\n\n✅ Crear una VM y tomar/restaurar snapshots\n✅ Moverte en la terminal: pwd, ls, cd, mkdir, cp, mv, rm, cat, grep, |\n✅ Conectarte a un servidor remoto con PuTTY/SSH y diagnosticar si no conecta\n✅ Observar el sistema: top, free -m, df -h, ps -ef\n✅ Encender/apagar tu Oracle en Docker y leer sus logs\n✅ Entrar con SQL*Plus y ejecutar una consulta\n\nEl quiz final repasa todo el módulo. Al aprobarlo desbloqueas el **Nivel 1: SQL**, donde empiezas a hablar el idioma de las bases de datos en serio. 🚀"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Antes de un experimento destructivo en tu VM, ¿qué haces?",
+     "opciones": [
+      "Rezar",
+      "Tomar un snapshot para poder volver atrás",
+      "Apagar el monitor"
+     ],
+     "correcta": 1,
+     "explicacion": "Snapshot = guardar partida. Experimenta sin miedo; restaura si hace falta."
+    },
+    {
+     "pregunta": "¿Cuál es el camino completo desde tu teclado hasta la base de datos?",
+     "opciones": [
+      "PC → SSH → VM Linux → Docker → contenedor Oracle → SQL*Plus",
+      "PC → Excel → Oracle",
+      "PC → impresora → servidor"
+     ],
+     "correcta": 0,
+     "explicacion": "Cada eslabón es un concepto que ya dominas. Ese caminito es el día a día del DBA."
+    },
+    {
+     "pregunta": "Quieres ver si tu contenedor de Oracle está encendido y luego revisar su diario. ¿Qué par de comandos usas?",
+     "opciones": [
+      "docker ps y docker logs oracle-lab",
+      "ls y cat",
+      "ping y ssh"
+     ],
+     "correcta": 0,
+     "explicacion": "docker ps lista lo encendido; docker logs muestra el diario del contenedor."
+    },
+    {
+     "pregunta": "¿Cuál es la regla de oro del laboratorio?",
+     "opciones": [
+      "Nunca tocar nada para no romper",
+      "Todo lo que aprendas, rómpelo (aquí romper es gratis)",
+      "Solo leer la teoría"
+     ],
+     "correcta": 1,
+     "explicacion": "Romper y recuperar en el laboratorio es la diferencia entre saber y entender."
+    }
+   ]
+  }
+ ]
+}
