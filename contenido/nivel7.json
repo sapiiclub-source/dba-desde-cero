@@ -1,0 +1,341 @@
+{
+ "nivel": 7,
+ "etiqueta": "Módulo 6",
+ "emoji": "🧩",
+ "titulo": "PL/SQL: programar dentro de la base",
+ "descripcion": "Bloques, packages, cursores, la lección de oro del rendimiento, errores y triggers. 7 lecciones + proyecto de carga.",
+ "lecciones": [
+  {
+   "id": "6.1",
+   "titulo": "PL/SQL: programar dentro de la base",
+   "paginas": [
+    {
+     "titulo": "Qué es y por qué existe",
+     "contenido": "SQL pide datos; **PL/SQL** es el lenguaje de programación de Oracle que envuelve al SQL con lógica: condiciones (IF), repeticiones (LOOP), variables, manejo de errores.\n\n```sql\nDECLARE\n  v_total NUMBER;                    -- una variable\nBEGIN\n  SELECT SUM(total) INTO v_total     -- SQL dentro del programa\n  FROM ventas\n  WHERE fecha >= TRUNC(SYSDATE);\n\n  IF v_total > 1000000 THEN\n    DBMS_OUTPUT.PUT_LINE('¡Gran día de ventas!');\n  ELSE\n    DBMS_OUTPUT.PUT_LINE('Día normal: ' || v_total);\n  END IF;\nEND;\n/\n```\n\nEstructura del **bloque**: `DECLARE` (variables) → `BEGIN` (lógica) → `END;`. El `INTO` mete el resultado del SELECT en la variable. El `||` concatena textos. `DBMS_OUTPUT.PUT_LINE` imprime (activa la salida con `SET SERVEROUTPUT ON` en SQL*Plus)."
+    },
+    {
+     "titulo": "¿Para qué lo usa un DBA/desarrollador de BD?",
+     "contenido": "- **Procesos batch**: cierres de mes, cálculos masivos, depuraciones nocturnas.\n- **Cargas e integraciones**: leer datos de staging, validar, transformar, cargar.\n- **Automatización**: el procedimiento del monitor nocturno que construiste en el M5 ¡ya era PL/SQL!\n- **Lógica junto a los datos**: validaciones complejas que deben cumplirse siempre, sin importar qué aplicación toque la base.\n\nLa ventaja clave: el código corre DENTRO de la base, al lado de los datos — sin viajes por la red por cada fila."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Cuál es la estructura básica de un bloque PL/SQL?",
+     "opciones": [
+      "BEGIN → DECLARE → END",
+      "DECLARE (variables) → BEGIN (lógica) → END;",
+      "START → RUN → STOP"
+     ],
+     "correcta": 1,
+     "explicacion": "Declarar, ejecutar, cerrar. El esqueleto de todo programa PL/SQL."
+    },
+    {
+     "pregunta": "¿Qué hace INTO en `SELECT SUM(total) INTO v_total`?",
+     "opciones": [
+      "Mete el resultado de la consulta dentro de la variable",
+      "Crea una tabla",
+      "Borra la variable"
+     ],
+     "correcta": 0,
+     "explicacion": "El puente entre SQL y las variables del programa."
+    },
+    {
+     "pregunta": "¿Cuál es la ventaja de que el código corra dentro de la base?",
+     "opciones": [
+      "Es más bonito",
+      "Trabaja al lado de los datos: sin viajes de red por cada fila",
+      "Usa menos disco"
+     ],
+     "correcta": 1,
+     "explicacion": "Cercanía a los datos = la razón de ser de PL/SQL para procesos masivos."
+    }
+   ]
+  },
+  {
+   "id": "6.2",
+   "titulo": "Procedures, functions y packages",
+   "paginas": [
+    {
+     "titulo": "Programas con nombre",
+     "contenido": "El bloque anónimo se ejecuta y se olvida. Para guardar programas en la base:\n\n```sql\n-- PROCEDURE: ejecuta una acción\nCREATE OR REPLACE PROCEDURE sube_precio(\n  p_producto_id IN NUMBER,\n  p_porcentaje  IN NUMBER\n) AS\nBEGIN\n  UPDATE productos\n  SET precio = precio * (1 + p_porcentaje/100)\n  WHERE id = p_producto_id;\nEND;\n/\n\nEXEC sube_precio(101, 10);   -- subir 10% al producto 101\n```\n\n```sql\n-- FUNCTION: devuelve un valor (usable dentro de un SELECT)\nCREATE OR REPLACE FUNCTION precio_con_iva(p_precio NUMBER)\nRETURN NUMBER AS\nBEGIN\n  RETURN ROUND(p_precio * 1.19, 0);\nEND;\n/\n\nSELECT nombre, precio_con_iva(precio) FROM productos;\n```"
+    },
+    {
+     "titulo": "Packages: la regla profesional",
+     "contenido": "Un **package** agrupa procedures y functions relacionados en una caja con nombre:\n\n```sql\nCREATE OR REPLACE PACKAGE pkg_precios AS      -- la \"portada\": qué ofrece\n  PROCEDURE sube_precio(p_id NUMBER, p_pct NUMBER);\n  FUNCTION  precio_con_iva(p_precio NUMBER) RETURN NUMBER;\nEND pkg_precios;\n/\n\nCREATE OR REPLACE PACKAGE BODY pkg_precios AS  -- el \"interior\": cómo lo hace\n  PROCEDURE sube_precio(p_id NUMBER, p_pct NUMBER) AS\n  BEGIN\n    UPDATE productos SET precio = precio*(1+p_pct/100) WHERE id = p_id;\n  END;\n  FUNCTION precio_con_iva(p_precio NUMBER) RETURN NUMBER AS\n  BEGIN\n    RETURN ROUND(p_precio * 1.19, 0);\n  END;\nEND pkg_precios;\n/\n```\n\nRegla profesional: **todo en packages**. Orden (lo relacionado vive junto), mantención (cambias el interior sin tocar la portada) y un esquema limpio en vez de 200 procedures sueltos. Se llama: `pkg_precios.sube_precio(101, 10);`"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Diferencia entre procedure y function?",
+     "opciones": [
+      "Ninguna",
+      "La function DEVUELVE un valor y puede usarse dentro de un SELECT; el procedure ejecuta acciones",
+      "El procedure es más rápido"
+     ],
+     "correcta": 1,
+     "explicacion": "Function = calcular y devolver. Procedure = hacer."
+    },
+    {
+     "pregunta": "¿Qué partes tiene un package?",
+     "opciones": [
+      "Cabeza y cola",
+      "Especificación (la portada: qué ofrece) y body (el interior: cómo lo hace)",
+      "Solo el body"
+     ],
+     "correcta": 1,
+     "explicacion": "Separar interfaz de implementación: cambias el cómo sin romper a quienes lo usan."
+    },
+    {
+     "pregunta": "¿Por qué \"todo en packages\" es la regla profesional?",
+     "opciones": [
+      "Por moda",
+      "Orden, mantención y esquemas limpios: lo relacionado vive junto, tras una interfaz estable",
+      "Porque los procedures sueltos están prohibidos"
+     ],
+     "correcta": 1,
+     "explicacion": "200 procedures sueltos = caos. Packages = arquitectura."
+    }
+   ]
+  },
+  {
+   "id": "6.3",
+   "titulo": "Cursores y loops: recorrer datos",
+   "paginas": [
+    {
+     "titulo": "El cursor FOR loop",
+     "contenido": "Para procesar varias filas, la forma más limpia es el **cursor FOR loop**:\n\n```sql\nBEGIN\n  FOR fila IN (SELECT id, nombre, precio FROM productos WHERE stock = 0)\n  LOOP\n    DBMS_OUTPUT.PUT_LINE('Sin stock: ' || fila.nombre);\n    -- aquí podrías insertar en una tabla de avisos, etc.\n  END LOOP;\nEND;\n/\n```\n\n`fila` es una variable automática que en cada vuelta contiene la fila siguiente (accedes con `fila.columna`). Oracle abre, recorre y cierra el cursor por ti.\n\nTambién existen los loops clásicos: `LOOP ... EXIT WHEN ...; END LOOP;`, `WHILE ... LOOP`, `FOR i IN 1..10 LOOP` (numérico)."
+    },
+    {
+     "titulo": "La advertencia que cambia carreras",
+     "contenido": "El cursor loop es cómodo... y ahí está su peligro: invita a procesar **fila por fila** cosas que el SQL haría de un solo golpe.\n\n```sql\n-- ❌ El antipatrón: 1 millón de vueltas, 1 millón de UPDATEs\nFOR fila IN (SELECT id FROM productos) LOOP\n  UPDATE productos SET precio = precio * 1.1 WHERE id = fila.id;\nEND LOOP;\n\n-- ✅ Lo mismo, en UNA orden:\nUPDATE productos SET precio = precio * 1.1;\n```\n\nLa diferencia puede ser de **horas a segundos**. La próxima lección te da la jerarquía completa y el porqué técnico. Por ahora, tatúate la pregunta que todo profesional se hace antes de escribir un loop:\n\n> *\"¿Esto se puede hacer en un solo SQL?\"* — La respuesta suele ser sí."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué hace el cursor FOR loop?",
+     "opciones": [
+      "Recorre las filas de una consulta, una por vuelta, abriendo y cerrando el cursor automáticamente",
+      "Borra el cursor",
+      "Acelera los índices"
+     ],
+     "correcta": 0,
+     "explicacion": "La forma más limpia de iterar resultados en PL/SQL."
+    },
+    {
+     "pregunta": "¿Cuál es el antipatrón clásico con loops?",
+     "opciones": [
+      "Usar variables",
+      "Procesar fila por fila lo que un solo SQL haría de un golpe",
+      "Imprimir mensajes"
+     ],
+     "correcta": 1,
+     "explicacion": "Horas vs segundos. La pregunta sagrada: ¿esto cabe en un solo SQL?"
+    },
+    {
+     "pregunta": "¿Cómo accedes a una columna dentro del loop `FOR fila IN (...)`?",
+     "opciones": [
+      "fila.columna",
+      "columna.fila",
+      "GET(columna)"
+     ],
+     "correcta": 0,
+     "explicacion": "fila.nombre, fila.precio... la variable automática del loop."
+    }
+   ]
+  },
+  {
+   "id": "6.4",
+   "titulo": "La lección de oro: por lotes, no por filas",
+   "paginas": [
+    {
+     "titulo": "El switch de contexto",
+     "contenido": "¿Por qué el loop fila a fila es tan lento? Porque PL/SQL y SQL son **dos motores distintos** dentro de Oracle, y cada llamada SQL desde PL/SQL cruza una frontera (el **switch de contexto**). Un loop de un millón de filas = un millón de cruces. Cada cruce es barato; un millón, no.\n\nLas soluciones, de buena a excelente:\n\n1. **BULK COLLECT + FORALL**: traer y procesar por LOTES de miles:\n```sql\nDECLARE\n  TYPE t_ids IS TABLE OF productos.id%TYPE;\n  v_ids t_ids;\n  CURSOR c IS SELECT id FROM productos WHERE stock = 0;\nBEGIN\n  OPEN c;\n  LOOP\n    FETCH c BULK COLLECT INTO v_ids LIMIT 1000;  -- de a 1000\n    EXIT WHEN v_ids.COUNT = 0;\n    FORALL i IN 1..v_ids.COUNT                    -- un solo cruce por lote\n      UPDATE productos SET descontinuado = 'S' WHERE id = v_ids(i);\n  END LOOP;\n  CLOSE c;\n  COMMIT;\nEND;\n/\n```\n2. **Un solo SQL** (UPDATE masivo, INSERT-SELECT, MERGE): cero cruces.\n\n🏆 **La jerarquía a tatuarse: SQL puro > PL/SQL por lotes > PL/SQL fila a fila.**"
+    },
+    {
+     "titulo": "El experimento que no olvidarás",
+     "contenido": "En tu laboratorio, carga 1 millón de filas de tres formas y **cronometra**:\n\n1. Loop con INSERT fila a fila (prepárate a esperar... minutos largos).\n2. BULK COLLECT + FORALL con LIMIT 1000 (decenas de veces más rápido).\n3. Un solo `INSERT INTO destino SELECT ... FROM origen;` (segundos).\n\nDocumenta los tres tiempos. Esa tabla de números es la evidencia que usarás toda tu carrera para convencer a desarrolladores de reescribir sus loops — con datos, no con opiniones.\n\n💡 Bonus: **MERGE** (lección 1.4, familia DML) es la joya de las cargas: \"si la fila existe actualízala, si no insértala\", todo en una orden. La conocerás a fondo en los proyectos de integración."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué el loop fila a fila es lento?",
+     "opciones": [
+      "Por los índices",
+      "Porque cada SQL desde PL/SQL cruza la frontera entre dos motores: un millón de filas = un millón de cruces",
+      "Porque PL/SQL es un lenguaje lento"
+     ],
+     "correcta": 1,
+     "explicacion": "El switch de contexto. Por lotes (FORALL) o en un solo SQL, los cruces casi desaparecen."
+    },
+    {
+     "pregunta": "¿Cuál es la jerarquía de rendimiento?",
+     "opciones": [
+      "Fila a fila > lotes > SQL puro",
+      "SQL puro > PL/SQL por lotes > PL/SQL fila a fila",
+      "Todas rinden igual"
+     ],
+     "correcta": 1,
+     "explicacion": "La regla de oro del rendimiento en PL/SQL. Tatuaje mental obligatorio."
+    },
+    {
+     "pregunta": "¿Qué hace LIMIT 1000 en el BULK COLLECT?",
+     "opciones": [
+      "Limita la tabla a 1000 filas",
+      "Procesa de a lotes de 1000: controla la memoria y mantiene la velocidad",
+      "Borra 1000 filas"
+     ],
+     "correcta": 1,
+     "explicacion": "Lotes razonables (cientos a miles): velocidad de bulk sin devorar la PGA (¿recuerdas 2.5?)."
+    }
+   ]
+  },
+  {
+   "id": "6.5",
+   "titulo": "Errores como adulto",
+   "paginas": [
+    {
+     "titulo": "La sección EXCEPTION",
+     "contenido": "```sql\nBEGIN\n  UPDATE productos SET precio = precio * 1.1 WHERE id = :id;\n  IF SQL%ROWCOUNT = 0 THEN\n    RAISE_APPLICATION_ERROR(-20001, 'El producto no existe');\n  END IF;\n  COMMIT;\nEXCEPTION\n  WHEN OTHERS THEN\n    ROLLBACK;\n    pkg_log.error('sube_precio', SQLERRM);  -- registrar SIEMPRE\n    RAISE;                                   -- y relanzar\nEND;\n/\n```\n\nPiezas: `SQL%ROWCOUNT` (¿cuántas filas tocó el último SQL?), `RAISE_APPLICATION_ERROR` (lanzar tu propio error, códigos -20000 a -20999), `SQLERRM` (el mensaje del error capturado), `RAISE` (relanzar hacia quien llamó)."
+    },
+    {
+     "titulo": "El pecado capital",
+     "contenido": "```sql\nEXCEPTION\n  WHEN OTHERS THEN NULL;   -- ☠️ EL PECADO CAPITAL\n```\n\n\"Si algo falla, **ignóralo en silencio**\". Es la causa de los errores invisibles que explotan meses después: la carga que \"corrió bien\" pero dejó la mitad de los datos afuera, sin que nadie supiera.\n\nLa regla adulta: **si capturas, registra y decide** (manejar con criterio o relanzar). Nunca tragar en silencio.\n\n🧰 Tu proyecto del módulo: el paquete **PKG_LOG** — una tabla de bitácora (fecha, proceso, nivel, mensaje) y procedimientos `info()` y `error()` que TODOS tus procesos usarán. Un proceso sin bitácora es un proceso indebuggeable; con PKG_LOG, cada ejecución cuenta su historia. (Lo construyes en el lab del checkpoint.)"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué `WHEN OTHERS THEN NULL;` es el pecado capital?",
+     "opciones": [
+      "Porque es lento",
+      "Porque traga errores en silencio: fallas invisibles que explotan meses después",
+      "Porque NULL está prohibido"
+     ],
+     "correcta": 1,
+     "explicacion": "Si capturas: registra y decide. Jamás silenciar."
+    },
+    {
+     "pregunta": "¿Qué te dice SQL%ROWCOUNT?",
+     "opciones": [
+      "El total de filas de la tabla",
+      "Cuántas filas afectó el último SQL ejecutado",
+      "El número de errores"
+     ],
+     "correcta": 1,
+     "explicacion": "Clave para validar: \"el UPDATE no tocó nada\" suele ser un error de negocio que hay que avisar."
+    },
+    {
+     "pregunta": "¿Qué es PKG_LOG y por qué importa?",
+     "opciones": [
+      "Un paquete de Oracle para borrar logs",
+      "Tu paquete de bitácora: todo proceso registra qué hizo y qué falló — sin él, indebuggeable",
+      "Una vista del diccionario"
+     ],
+     "correcta": 1,
+     "explicacion": "La instrumentación es la diferencia entre adivinar y saber qué pasó a las 3 AM."
+    }
+   ]
+  },
+  {
+   "id": "6.6",
+   "titulo": "Triggers: poder y peligro",
+   "paginas": [
+    {
+     "titulo": "Código que se dispara solo",
+     "contenido": "Un **trigger** se ejecuta automáticamente cuando algo pasa:\n\n```sql\nCREATE OR REPLACE TRIGGER trg_audita_precios\nAFTER UPDATE OF precio ON productos\nFOR EACH ROW\nBEGIN\n  INSERT INTO auditoria_precios\n    (producto_id, precio_viejo, precio_nuevo, usuario, fecha)\n  VALUES\n    (:OLD.id, :OLD.precio, :NEW.precio, USER, SYSDATE);\nEND;\n/\n```\n\nPiezas: `AFTER UPDATE OF precio` (cuándo), `FOR EACH ROW` (una vez por fila afectada), y las estrellas **`:OLD` y `:NEW`** — la fila como estaba y como queda. Nadie puede cambiar un precio sin dejar huella, use la aplicación que use."
+    },
+    {
+     "titulo": "La regla profesional",
+     "contenido": "Los triggers son poderosos... y por eso peligrosos:\n\n- **Lógica invisible**: el desarrollador hace un UPDATE y \"mágicamente\" pasan otras cosas. Seis meses después, nadie recuerda por qué.\n- **Dolor en cargas masivas**: un trigger FOR EACH ROW sobre una carga de 10 millones de filas = 10 millones de disparos (¡y acabas de aprender en 6.4 lo que cuesta eso!).\n- **Cadenas**: un trigger que modifica otra tabla que tiene otro trigger que... efectos dominó indepurables.\n\nRegla profesional: triggers para **auditoría**, valores por defecto complejos, y poco más. La lógica de negocio vive en packages, donde se ve, se prueba y se mantiene. Si te encuentras escribiendo reglas de negocio en un trigger, detente y pregúntate si pertenece a un package."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué son :OLD y :NEW en un trigger?",
+     "opciones": [
+      "Dos tablas del sistema",
+      "La fila como estaba antes y como queda después del cambio",
+      "Versiones de Oracle"
+     ],
+     "correcta": 1,
+     "explicacion": "El antes y el después: la base de toda auditoría por trigger."
+    },
+    {
+     "pregunta": "¿Por qué los triggers duelen en cargas masivas?",
+     "opciones": [
+      "Porque FOR EACH ROW se dispara por cada fila: 10 millones de filas = 10 millones de ejecuciones",
+      "Porque bloquean la tabla",
+      "No duelen"
+     ],
+     "correcta": 0,
+     "explicacion": "El switch de contexto de 6.4, multiplicado. Las cargas masivas suelen deshabilitar triggers."
+    },
+    {
+     "pregunta": "¿Cuál es la regla profesional sobre triggers?",
+     "opciones": [
+      "Usarlos para toda la lógica de negocio",
+      "Auditoría y poco más: la lógica de negocio vive en packages, visible y mantenible",
+      "Nunca usarlos jamás"
+     ],
+     "correcta": 1,
+     "explicacion": "Poder con disciplina. La lógica invisible es deuda técnica."
+    }
+   ]
+  },
+  {
+   "id": "6.7",
+   "titulo": "Checkpoint Módulo 6 + mini proyecto",
+   "paginas": [
+    {
+     "titulo": "Tu mini proyecto: la carga profesional",
+     "contenido": "Integra TODO el módulo construyendo un proceso de carga real en tu lab:\n\n1. **PKG_LOG** (lección 6.5): tabla de bitácora + procedimientos info/error.\n2. Una tabla `staging_clientes` con datos \"sucios\" a propósito (edades negativas, nombres nulos, duplicados).\n3. **PKG_CARGA** con un procedimiento que: lea staging por lotes (BULK/FORALL), valide cada regla, cargue lo bueno a `clientes`, registre lo malo en `rechazos` (con el motivo), y deje bitácora de inicio/fin/conteos.\n4. Un **trigger de auditoría** sobre clientes (quién cambió qué y cuándo).\n5. Un job nocturno (¡M5!) que ejecute la carga.\n\nEse proyecto ES, en miniatura, un proceso de producción real: el tipo de pieza que mostrarás en entrevistas."
+    },
+    {
+     "titulo": "Checkpoint",
+     "contenido": "Sin mirar, deberías poder:\n\n✅ Escribir un bloque PL/SQL con variables, IF y un SELECT INTO\n✅ Explicar procedure vs function vs package (y por qué \"todo en packages\")\n✅ Recitar la jerarquía: SQL puro > lotes > fila a fila, y el porqué (switch de contexto)\n✅ Condenar el WHEN OTHERS THEN NULL con argumentos\n✅ Decir cuándo SÍ y cuándo NO usar triggers\n\nCon esto cierras el Nivel 2 del curso completo. Lo que sigue: **el bloque de PERFORMANCE** — el optimizador, los planes de ejecución y el arte del diagnóstico. Donde los DBA buenos se vuelven seniors. 🚀"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Tu proceso de carga debe insertar 5 millones de filas validadas. ¿Qué técnica usas?",
+     "opciones": [
+      "Loop fila a fila con INSERT",
+      "BULK COLLECT + FORALL por lotes (o un solo SQL si las validaciones lo permiten)",
+      "Un trigger"
+     ],
+     "correcta": 1,
+     "explicacion": "La jerarquía de 6.4 aplicada. Fila a fila en 5 millones = horas perdidas."
+    },
+    {
+     "pregunta": "¿Dónde deben quedar las filas que NO pasan la validación?",
+     "opciones": [
+      "Se descartan en silencio",
+      "En una tabla de rechazos CON el motivo, y el conteo en la bitácora",
+      "Se cargan igual"
+     ],
+     "correcta": 1,
+     "explicacion": "Trazabilidad total: nada se pierde en silencio (la lección de 6.5 aplicada a datos)."
+    },
+    {
+     "pregunta": "¿Qué pieza garantiza que cualquier cambio de precios deje huella sin importar la aplicación?",
+     "opciones": [
+      "Un índice",
+      "El trigger de auditoría con :OLD y :NEW",
+      "Un sinónimo"
+     ],
+     "correcta": 1,
+     "explicacion": "El caso legítimo de los triggers: auditoría imborrable a nivel de base."
+    },
+    {
+     "pregunta": "¿Qué viene después de este módulo?",
+     "opciones": [
+      "El bloque de performance: optimizador, planes y diagnóstico",
+      "Nada, el curso terminó",
+      "Volver al SQL básico"
+     ],
+     "correcta": 0,
+     "explicacion": "El territorio donde se forjan los seniors. Todo lo aprendido hasta aquí es el cimiento."
+    }
+   ]
+  }
+ ]
+}

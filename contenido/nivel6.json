@@ -1,0 +1,256 @@
+{
+ "nivel": 6,
+ "etiqueta": "Módulo 5",
+ "emoji": "🛠️",
+ "titulo": "Administración del día a día",
+ "descripcion": "Usuarios y permisos, la rutina del DBA, parámetros, diagnóstico de conexiones y multitenant. 5 lecciones + proyecto.",
+ "lecciones": [
+  {
+   "id": "5.1",
+   "titulo": "Usuarios, privilegios y roles",
+   "paginas": [
+    {
+     "titulo": "Las tres piezas",
+     "contenido": "```sql\n-- Crear un usuario\nCREATE USER ana IDENTIFIED BY \"ClaveSegura123\";\n\n-- Privilegio de SISTEMA: poder hacer algo\nGRANT CREATE SESSION TO ana;   -- poder conectarse\nGRANT CREATE TABLE TO ana;     -- poder crear tablas\n\n-- Privilegio de OBJETO: poder usar algo de otro\nGRANT SELECT ON ventas.clientes TO ana;  -- solo LEER esa tabla\n```\n\n- **Privilegios de sistema** = capacidades (\"puede crear tablas\").\n- **Privilegios de objeto** = permisos sobre cosas concretas (\"puede leer ESTA tabla\").\n- **Roles** = paquetes de privilegios con nombre, para no repartir de a uno:\n\n```sql\nCREATE ROLE consulta_ventas;\nGRANT SELECT ON ventas.clientes TO consulta_ventas;\nGRANT SELECT ON ventas.pedidos  TO consulta_ventas;\nGRANT consulta_ventas TO ana;   -- un grant, todo el paquete\n```",
+     "practica": {
+      "instruccion": "Dale al usuario ana el permiso de solo lectura sobre la tabla productos.",
+      "respuestas": [
+       "grant select on productos to ana"
+      ],
+      "pista": "GRANT permiso ON objeto TO usuario;",
+      "ok": "¡Eso! DCL en acción (¿recuerdas las 5 familias de 1.4?). Y REVOKE se lo quita."
+     }
+    },
+    {
+     "titulo": "El principio sagrado: mínimo privilegio",
+     "contenido": "La tentación eterna: \"dale DBA y listo, así funciona\". **Jamás.**\n\nEl principio de **mínimo privilegio**: cada usuario recibe EXACTAMENTE lo que necesita, nada más. ¿Por qué?\n\n- Una aplicación hackeada con permisos mínimos daña poco; con DBA, lo daña todo.\n- Un error humano (\"borré la tabla equivocada\") solo es posible donde hay permiso de borrar.\n- Las auditorías de seguridad (y las multas) se alimentan de permisos regalados.\n\nPatrón profesional para aplicaciones: el **dueño del esquema** (tiene las tablas, nadie se conecta con él a diario) separado del **usuario de aplicación** (solo los permisos puntuales que la app necesita). Dos usuarios, responsabilidades separadas."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Diferencia entre privilegio de sistema y de objeto?",
+     "opciones": [
+      "Ninguna",
+      "Sistema = capacidades generales (crear tablas); objeto = permisos sobre algo concreto (leer ESTA tabla)",
+      "El de objeto es más caro"
+     ],
+     "correcta": 1,
+     "explicacion": "CREATE TABLE vs SELECT ON ventas.clientes. Dos naturalezas distintas."
+    },
+    {
+     "pregunta": "¿Para qué sirven los roles?",
+     "opciones": [
+      "Para agrupar privilegios en paquetes con nombre y asignarlos de una vez",
+      "Para conectarse más rápido",
+      "Para respaldar"
+     ],
+     "correcta": 0,
+     "explicacion": "Un rol bien diseñado = administración de permisos ordenada y auditable."
+    },
+    {
+     "pregunta": "¿Por qué NO darle DBA a la aplicación \"para que funcione\"?",
+     "opciones": [
+      "Porque es caro",
+      "Porque viola el mínimo privilegio: un hackeo o un error tendría alcance total",
+      "Sí hay que dárselo"
+     ],
+     "correcta": 1,
+     "explicacion": "El alcance del daño es proporcional a los permisos regalados."
+    }
+   ]
+  },
+  {
+   "id": "5.2",
+   "titulo": "La rutina diaria: alert log y vigilancia",
+   "paginas": [
+    {
+     "titulo": "El ritual de la mañana",
+     "contenido": "Un DBA profesional revisa cada mañana (idealmente, automatizado con alertas):\n\n1. **El alert log** (lección 2.7): ¿errores ORA- nuevos? `grep ORA- alert_FREE.log | tail -50`\n2. **Espacio**: ¿algún tablespace bajo 10%? (tu consulta de 3.6)\n3. **¿Corrieron los respaldos nocturnos?** (lo verás en el Módulo 10)\n4. **Sesiones anómalas**: ¿bloqueos colgados desde anoche? ¿sesiones zombies? (tu consulta de 4.4)\n5. **El disco del servidor**: `df -h` (M0.4) — el enemigo silencioso.\n\n💡 Cinco minutos de rutina evitan el 80% de las emergencias. Los incendios de las 3 PM casi siempre dieron señales a las 9 AM."
+    },
+    {
+     "titulo": "Tareas programadas: DBMS_SCHEDULER",
+     "contenido": "Para que la base trabaje sola de noche:\n\n```sql\nBEGIN\n  DBMS_SCHEDULER.CREATE_JOB(\n    job_name        => 'REVISA_ESPACIO',\n    job_type        => 'PLSQL_BLOCK',\n    job_action      => 'BEGIN pkg_monitoreo.revisar_tablespaces; END;',\n    start_date      => SYSTIMESTAMP,\n    repeat_interval => 'FREQ=DAILY; BYHOUR=2; BYMINUTE=0',\n    enabled         => TRUE);\nEND;\n/\n```\n\nTraducción: \"todas las noches a las 02:00, ejecuta este programa\". El scheduler maneja reintentos, registros de ejecución (`DBA_SCHEDULER_JOB_RUN_DETAILS`: ¿corrió?, ¿falló?, ¿cuánto tardó?) y calendarios complejos.\n\nTu primer proyecto de automatización (lo construirás al final de este módulo): el job nocturno que registra el espacio de cada tablespace y deja una alerta si algo baja del umbral. Prevención > reacción, como aprendiste en 3.6."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Cuál es la lectura diaria obligatoria del DBA?",
+     "opciones": [
+      "El alert log (más espacio, respaldos, sesiones y disco)",
+      "Las noticias",
+      "El manual de Oracle completo"
+     ],
+     "correcta": 0,
+     "explicacion": "Cinco minutos de rutina matinal evitan el 80% de las emergencias."
+    },
+    {
+     "pregunta": "¿Qué hace DBMS_SCHEDULER?",
+     "opciones": [
+      "Acelera las consultas",
+      "Programa tareas automáticas (jobs) con calendario, reintentos y registro",
+      "Ordena las tablas"
+     ],
+     "correcta": 1,
+     "explicacion": "El \"cron\" interno de Oracle. La automatización es la firma del DBA moderno."
+    },
+    {
+     "pregunta": "¿Dónde verificas si un job corrió y cuánto tardó?",
+     "opciones": [
+      "En DBA_SCHEDULER_JOB_RUN_DETAILS",
+      "En el spfile",
+      "En V$VERSION"
+     ],
+     "correcta": 0,
+     "explicacion": "El historial de ejecuciones del scheduler. Diccionario de datos, como siempre (2.8)."
+    }
+   ]
+  },
+  {
+   "id": "5.3",
+   "titulo": "Parámetros: la configuración del motor",
+   "paginas": [
+    {
+     "titulo": "El spfile y los dos ámbitos",
+     "contenido": "Oracle tiene cientos de **parámetros** de configuración (memoria, procesos, comportamiento). Viven en el **spfile** (lección 2.7: lo primero que se lee al encender).\n\n```sql\n-- Ver un parámetro\nSHOW PARAMETER sga_target;\n\n-- Cambiarlo\nALTER SYSTEM SET sga_target = 4G SCOPE=BOTH;\n```\n\nEl detalle clave es el **SCOPE** (ámbito):\n- `SCOPE=MEMORY` → cambia AHORA, pero se pierde al reiniciar.\n- `SCOPE=SPFILE` → queda guardado, pero aplica recién al próximo reinicio (necesario para parámetros estáticos).\n- `SCOPE=BOTH` → ahora Y para siempre (default si el parámetro es dinámico).\n\n🎤 Pregunta de entrevista: \"cambiaste un parámetro y tras el reinicio volvió al valor viejo, ¿qué pasó?\" → Lo cambiaron con SCOPE=MEMORY."
+    },
+    {
+     "titulo": "La regla del senior",
+     "contenido": "En internet abundan listas de \"parámetros mágicos para acelerar Oracle\". La regla profesional:\n\n> **Desconfía de quien tunea parámetros sin evidencia.** Los defaults modernos son buenos; los cambios se hacen con diagnóstico (un problema medido), no con superstición.\n\nLos pocos que sí configurarás conscientemente: memoria (`SGA_TARGET`, `PGA_AGGREGATE_TARGET`), conexiones (`PROCESSES`), y el destino de archivos. El resto, solo con causa demostrada.\n\nY un clásico de soporte: el parámetro `PROCESSES` quedó corto → error **ORA-00020: maximum number of processes exceeded** → nadie más puede conectarse. Ahora sabes diagnosticarlo (¿qué consume las conexiones? V$SESSION) y resolverlo (subir el parámetro... SCOPE=SPFILE + reinicio, porque es estático)."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Cambiaste un parámetro y tras reiniciar volvió al valor anterior. ¿Qué pasó?",
+     "opciones": [
+      "Oracle lo rechazó",
+      "Se cambió con SCOPE=MEMORY: solo vivió hasta el reinicio",
+      "Los parámetros no se pueden cambiar"
+     ],
+     "correcta": 1,
+     "explicacion": "MEMORY = ahora pero volátil. SPFILE = persistente al próximo reinicio. BOTH = ambos."
+    },
+    {
+     "pregunta": "¿Cuál es la regla del senior sobre parámetros?",
+     "opciones": [
+      "Cambiar muchos para que la base vuele",
+      "Cambiar solo con evidencia y diagnóstico: los defaults modernos son buenos",
+      "Nunca tocar ninguno jamás"
+     ],
+     "correcta": 1,
+     "explicacion": "Tuning de parámetros sin medición = superstición. Diagnóstico primero."
+    },
+    {
+     "pregunta": "ORA-00020: maximum number of processes exceeded. ¿Qué significa?",
+     "opciones": [
+      "El disco se llenó",
+      "Se alcanzó el límite del parámetro PROCESSES: no caben más conexiones",
+      "La contraseña venció"
+     ],
+     "correcta": 1,
+     "explicacion": "Diagnóstico: ¿qué consume las sesiones? Solución: subir PROCESSES (estático: SPFILE + reinicio)."
+    }
+   ]
+  },
+  {
+   "id": "5.4",
+   "titulo": "Conexiones: listener, tnsnames y el diagnóstico",
+   "paginas": [
+    {
+     "titulo": "Las piezas de una conexión",
+     "contenido": "Repaso ampliado del flujo (2.6): la aplicación toca la puerta → el **listener** (puerto 1521) la recibe → le asigna un proceso servidor. Los archivos involucrados:\n\n- **listener.ora** (en el servidor): configura al portero — en qué puerto escucha y qué bases anuncia.\n- **tnsnames.ora** (en el cliente): la \"agenda de contactos\" — traduce un alias amigable a IP+puerto+servicio:\n\n```\nPROD =\n  (DESCRIPTION =\n    (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.1.50)(PORT = 1521))\n    (CONNECT_DATA = (SERVICE_NAME = ventas))\n  )\n```\n\nCon eso, `sqlplus ana@PROD` busca \"PROD\" en la agenda y sabe a dónde llamar.\n\nComandos del portero: `lsnrctl status` (¿está vivo y qué servicios anuncia?), `lsnrctl start/stop`."
+    },
+    {
+     "titulo": "El método ante \"no puedo conectarme\"",
+     "contenido": "El ticket más frecuente de tu carrera. Diagnóstico de afuera hacia adentro (¡como en M0.3!):\n\n1. **¿Hay red?** → `ping 192.168.1.50` (si no responde: problema de red/firewall, no tuyo).\n2. **¿El puerto está abierto?** → desde el cliente: `tnsping PROD` o probar el puerto 1521.\n3. **¿El listener está arriba y anuncia el servicio?** → en el servidor: `lsnrctl status`.\n4. **¿La base está OPEN?** → `SELECT status FROM v$instance;`\n5. **¿Credenciales/permisos?** → ¿usuario bloqueado? (`DBA_USERS.account_status`), ¿tiene CREATE SESSION?\n\nErrores típicos traducidos: **ORA-12541** = no hay listener en esa IP:puerto. **ORA-12514** = el listener vive pero no conoce ese servicio (revisa el SERVICE_NAME). **ORA-01017** = usuario/clave inválidos (al menos llegaste 😄)."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué es el tnsnames.ora?",
+     "opciones": [
+      "La agenda del cliente: traduce un alias a IP + puerto + servicio",
+      "El registro de errores",
+      "La configuración de memoria"
+     ],
+     "correcta": 0,
+     "explicacion": "PROD → 192.168.1.50:1521/ventas. El cliente marca por alias."
+    },
+    {
+     "pregunta": "ORA-12514 significa que...",
+     "opciones": [
+      "La clave está mal",
+      "El listener responde pero NO conoce ese SERVICE_NAME",
+      "No hay red"
+     ],
+     "correcta": 1,
+     "explicacion": "El portero vive pero no anuncia ese servicio. ORA-12541 sería portero ausente; ORA-01017, credenciales."
+    },
+    {
+     "pregunta": "¿Cuál es el ORDEN correcto del diagnóstico de conexión?",
+     "opciones": [
+      "Credenciales → base → red",
+      "De afuera hacia adentro: red → puerto → listener → base → credenciales",
+      "Da igual el orden"
+     ],
+     "correcta": 1,
+     "explicacion": "El método de capas descarta rápido. El 90% de los \"no conecto\" cae en los primeros 3 pasos."
+    }
+   ]
+  },
+  {
+   "id": "5.5",
+   "titulo": "Multitenant: el edificio de departamentos",
+   "paginas": [
+    {
+     "titulo": "CDB y PDB",
+     "contenido": "Las versiones modernas de Oracle usan la arquitectura **multitenant**:\n\n- El **CDB** (Container Database) = el edificio: UNA instancia, UN conjunto de procesos y memoria.\n- Las **PDB** (Pluggable Databases) = los departamentos: bases de datos independientes que viven dentro, cada una con sus usuarios, tablas y aplicación.\n\nTu laboratorio ya es así: `FREE` es el CDB y **FREEPDB1** (¿te sonaba de M0.6?) es tu PDB.\n\n¿La gracia? Eficiencia (10 PDBs comparten una instancia en vez de 10 instancias) y agilidad:\n```sql\n-- Clonar una base COMPLETA en minutos (¡el refresco de QA soñado!)\nCREATE PLUGGABLE DATABASE qa1 FROM produccion;\n\n-- Moverse entre departamentos\nALTER SESSION SET CONTAINER = freepdb1;\n```",
+     "practica": {
+      "instruccion": "Cámbiate al contenedor (PDB) llamado freepdb1 con ALTER SESSION.",
+      "respuestas": [
+       "alter session set container = freepdb1",
+       "alter session set container=freepdb1"
+      ],
+      "pista": "ALTER SESSION SET CONTAINER = nombre;",
+      "ok": "¡Eso! Moverte entre PDBs será pan de cada día en bases modernas."
+     }
+    },
+    {
+     "titulo": "Checkpoint Módulo 5 + proyecto",
+     "contenido": "**Proyecto del módulo** (en tu lab): construye el **monitor nocturno**:\n1. Una tabla `monitoreo_espacio` (fecha, tablespace, mb_libres, alerta).\n2. Un procedimiento que la llene usando dba_free_space y marque alerta si libre < 10%.\n3. Un job de DBMS_SCHEDULER que lo ejecute cada noche a las 02:00.\n4. Una consulta \"dashboard\": el estado de hoy ordenado por % libre.\n\nEs tu primera automatización completa de DBA: tabla + lógica + calendario + consulta de control.\n\n**Checkpoint** — sin mirar: ✅ sistema vs objeto vs rol y el mínimo privilegio · ✅ la rutina de la mañana · ✅ SCOPE=MEMORY/SPFILE/BOTH · ✅ el método de 5 pasos del \"no conecto\" y los 3 errores ORA- típicos · ✅ CDB vs PDB. Siguiente: **Módulo 6, PL/SQL** — empiezas a programar dentro de la base. 🧩"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué es una PDB?",
+     "opciones": [
+      "Un tipo de respaldo",
+      "Una base de datos \"departamento\" que vive dentro del CDB compartiendo instancia",
+      "Un proceso de Oracle"
+     ],
+     "correcta": 1,
+     "explicacion": "El edificio (CDB) con departamentos (PDBs): eficiencia + clonado en minutos."
+    },
+    {
+     "pregunta": "Necesitas refrescar el ambiente de QA con una copia de producción. En multitenant...",
+     "opciones": [
+      "Se reinstala todo",
+      "CREATE PLUGGABLE DATABASE qa1 FROM produccion: un clon en minutos",
+      "Es imposible"
+     ],
+     "correcta": 1,
+     "explicacion": "El clonado de PDBs es una de las grandes gracias de la arquitectura moderna."
+    },
+    {
+     "pregunta": "Tu proyecto del módulo combina...",
+     "opciones": [
+      "Tabla + procedimiento + job nocturno + consulta de control",
+      "Solo consultas",
+      "Solo permisos"
+     ],
+     "correcta": 0,
+     "explicacion": "La anatomía de toda automatización de DBA. La repetirás mil veces en tu carrera."
+    }
+   ]
+  }
+ ]
+}

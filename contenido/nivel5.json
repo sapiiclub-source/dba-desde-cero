@@ -1,0 +1,261 @@
+{
+ "nivel": 5,
+ "etiqueta": "Módulo 4",
+ "emoji": "⚡",
+ "titulo": "La transacción: el corazón de Oracle",
+ "descripcion": "Redo, undo, el commit instantáneo, locks y el experimento del apagón. Los misterios del curso, revelados. 5 lecciones.",
+ "lecciones": [
+  {
+   "id": "4.1",
+   "titulo": "La transacción: todo o nada",
+   "paginas": [
+    {
+     "titulo": "El ejemplo eterno",
+     "contenido": "Una **transacción** es un grupo de cambios que deben ocurrir TODOS o NINGUNO.\n\nTransferir $100.000 de la cuenta A a la B son dos cambios: restar en A, sumar en B. Si la luz se corta entre medio, el banco NO puede quedar con la plata descontada de A pero nunca sumada en B.\n\n- `COMMIT;` → \"confirmo, que sea definitivo\".\n- `ROLLBACK;` → \"me arrepiento, deshaz todo lo que hice\".\n- Hasta el COMMIT, **nadie más ve tus cambios** (quedan \"en borrador\", como viste en la lección 1.3).\n\nEste módulo revela los misterios acumulados del curso: cómo sobreviven los bloques sucios a un apagón (2.3), por qué LGWR es vital (2.9), y por qué el DDL no tiene rollback (1.4)."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Qué garantiza una transacción?",
+     "opciones": [
+      "Que los cambios sean rápidos",
+      "Que un grupo de cambios ocurra completo o no ocurra en absoluto",
+      "Que nadie más use la tabla"
+     ],
+     "correcta": 1,
+     "explicacion": "Todo o nada. Sin esto, un corte a mitad de una transferencia dejaría el dinero \"perdido\"."
+    },
+    {
+     "pregunta": "Antes del COMMIT, tus cambios...",
+     "opciones": [
+      "Los ven todos",
+      "Solo los ves tú: están en borrador",
+      "Ya son definitivos"
+     ],
+     "correcta": 1,
+     "explicacion": "El borrador es privado. El COMMIT lo publica para el mundo."
+    },
+    {
+     "pregunta": "¿Qué comando deshace el borrador?",
+     "opciones": [
+      "DELETE",
+      "ROLLBACK",
+      "DROP"
+     ],
+     "correcta": 1,
+     "explicacion": "ROLLBACK deshace todo lo no confirmado de tu transacción."
+    }
+   ]
+  },
+  {
+   "id": "4.2",
+   "titulo": "El redo: la bitácora que lo protege todo",
+   "paginas": [
+    {
+     "titulo": "El problema pendiente desde la lección 2.3",
+     "contenido": "Oracle modifica los datos en RAM (bloques sucios) y los lleva al disco *después*, con calma (el reponedor DBWn). ¿Y si se corta la luz antes? La RAM se borra (lección 0.2)... ¿se pierden los cambios confirmados?\n\n**NO.** Y la solución es una idea simple y genial:\n\n> **Antes de tocar cualquier dato, Oracle anota el cambio en una bitácora EN EL DISCO.**\n\nEsa bitácora es el **redo** (\"rehacer\"). La anotación dice algo como: \"en el bloque 5.072, fila 3, el saldo cambió de 200 a 300\". Como la bitácora SÍ está en disco, **sobrevive al apagón**."
+    },
+    {
+     "titulo": "El ciclo completo, sin magia",
+     "contenido": "1. Escribes `UPDATE...` → el cambio queda en RAM + su \"receta\" en el redo log buffer (lección 2.5).\n2. Escribes `COMMIT;`\n3. **LGWR (el escribano)** corre a escribir la bitácora pendiente al disco. Son unas pocas líneas al final del cuaderno: **rapidísimo**.\n4. Oracle responde \"confirmado\". Tus datos pueden seguir solo en RAM, ¡y no importa!\n\nSi se corta la luz: al encender, **SMON (el conserje)** lee la bitácora y **re-aplica** todos los cambios confirmados que no alcanzaron a llegar a los datafiles. **Nada confirmado se pierde jamás.**\n\n🎤 Y aquí la respuesta a LA pregunta de entrevista: *¿por qué el COMMIT es instantáneo aunque modificaste un millón de filas?* → Porque el COMMIT no guarda los datos: guarda la bitácora, que es pequeña y secuencial. Los datos los lleva DBWn después, a su ritmo."
+    },
+    {
+     "titulo": "Los redo logs y el archivado",
+     "contenido": "La bitácora vive en los **redo log files** (típicamente 3 grupos que se van rotando: se llena uno, se pasa al siguiente). Y aquí una decisión crucial del DBA:\n\n- Modo **NOARCHIVELOG**: al rotar, el cuaderno viejo se sobrescribe. Historia perdida.\n- Modo **ARCHIVELOG**: antes de sobrescribir, cada cuaderno lleno se copia como **archived log** (bitácora histórica).\n\n¿Por qué importa? Los archived logs son el ingrediente que hará posible el **respaldo en caliente** y la **recuperación a cualquier punto del tiempo** (Módulo 10). Sin ARCHIVELOG no hay \"recuperar al estado de ayer a las 15:39\". Toda base de producción seria corre en ARCHIVELOG."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Por qué los cambios confirmados sobreviven a un apagón si estaban solo en RAM?",
+     "opciones": [
+      "Porque la RAM moderna no se borra",
+      "Porque su \"receta\" ya estaba en la bitácora (redo) EN DISCO, y al encender se re-aplican",
+      "No sobreviven"
+     ],
+     "correcta": 1,
+     "explicacion": "Write-ahead: la bitácora va al disco ANTES. SMON re-aplica al encender. El misterio del curso, resuelto."
+    },
+    {
+     "pregunta": "¿Por qué el COMMIT es instantáneo aunque modifiques un millón de filas?",
+     "opciones": [
+      "Porque escribe la bitácora (pequeña y secuencial), no los datos: esos los lleva DBWn después",
+      "Porque Oracle es rápido",
+      "Porque usa muchos procesadores"
+     ],
+     "correcta": 0,
+     "explicacion": "LA respuesta de entrevista. El escribano anota poco; el reponedor trabaja después con calma."
+    },
+    {
+     "pregunta": "¿Qué habilita el modo ARCHIVELOG?",
+     "opciones": [
+      "Consultas más rápidas",
+      "Conservar la historia de la bitácora: base del respaldo en caliente y la recuperación a un punto del tiempo",
+      "Más usuarios simultáneos"
+     ],
+     "correcta": 1,
+     "explicacion": "Sin archived logs no hay point-in-time recovery. Producción seria = ARCHIVELOG siempre."
+    }
+   ]
+  },
+  {
+   "id": "4.3",
+   "titulo": "El undo: la foto de cómo estaba antes",
+   "paginas": [
+    {
+     "titulo": "La otra mitad del mecanismo",
+     "contenido": "Oracle guarda también lo contrario del redo: por cada cambio, una nota de **cómo deshacerlo** (\"el saldo valía 200\"). Eso es el **undo**, y sirve para TRES cosas (memorízalas):\n\n1. **ROLLBACK**: si te arrepientes, Oracle aplica las notas al revés.\n2. **Lectura consistente** (la joya, siguiente página).\n3. **Recuperación**: tras un apagón, lo confirmado se rehace con redo... y lo NO confirmado que alcanzó a llegar a disco **se deshace con undo**. Roll forward + roll back = la base queda exacta."
+    },
+    {
+     "titulo": "Lectura consistente: la joya de Oracle",
+     "contenido": "Estás generando un informe de 10 minutos sobre la tabla de ventas. A los 3 minutos, alguien modifica y confirma ventas que tu informe aún no leía. ¿Tu informe sale mezclado (mitad datos viejos, mitad nuevos)?\n\n**No.** Oracle usa el undo para reconstruir los bloques **como estaban cuando tu consulta empezó**. Tu informe es una fotografía coherente de un instante.\n\nConsecuencia gloriosa: en Oracle, **los que leen nunca esperan a los que escriben, ni al revés**. Otros motores históricamente hacían esperar a los lectores; esta es LA diferencia arquitectónica de Oracle y la razón de muchos comportamientos distintos al migrar desde otros sistemas."
+    },
+    {
+     "titulo": "ORA-01555: snapshot too old",
+     "contenido": "Ahora puedes entender un error famoso que asusta a los juniors:\n\n```\nORA-01555: snapshot too old\n```\n\nTu consulta LARGA necesita las \"fotos antiguas\" del undo para mantener su vista consistente. Pero el espacio de undo es limitado y **se recicla**: si las fotos que tu consulta necesitaba ya fueron sobrescritas por transacciones nuevas... la consulta muere con ese error.\n\nNo es un capricho ni un bug: es física del mecanismo. Soluciones del DBA: undo tablespace más grande, `UNDO_RETENTION` más largo, o la consulta en horario de menos actividad.\n\n🎤 Poder explicar ORA-01555 en 1 minuto a un desarrollador es una marca registrada de DBA que entiende."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "¿Cuáles son los TRES usos del undo?",
+     "opciones": [
+      "Rollback, lectura consistente y recuperación",
+      "Backup, índices y permisos",
+      "Solo el rollback"
+     ],
+     "correcta": 0,
+     "explicacion": "El trío del undo. La lectura consistente es la joya que hace único a Oracle."
+    },
+    {
+     "pregunta": "En Oracle, un SELECT largo mientras otros modifican los datos...",
+     "opciones": [
+      "Se bloquea esperando",
+      "Ve los datos como estaban al iniciar, reconstruidos con undo: lectores y escritores no se esperan",
+      "Sale con datos mezclados"
+     ],
+     "correcta": 1,
+     "explicacion": "Fotografía coherente de un instante. Los lectores jamás bloquean a los escritores."
+    },
+    {
+     "pregunta": "¿Qué causa el ORA-01555?",
+     "opciones": [
+      "Una contraseña vencida",
+      "Una consulta larga necesitaba undo antiguo que ya fue reciclado",
+      "Falta de RAM"
+     ],
+     "correcta": 1,
+     "explicacion": "Las \"fotos\" que necesitaba fueron sobrescritas. Más undo, más retention, o mejor horario."
+    }
+   ]
+  },
+  {
+   "id": "4.4",
+   "titulo": "Locks: el \"ocupado\" de las filas",
+   "paginas": [
+    {
+     "titulo": "Cómo funciona",
+     "contenido": "Si dos personas intentan modificar **la misma fila** a la vez, la segunda **espera** a que la primera haga COMMIT o ROLLBACK. Eso es un **lock** (bloqueo), y es sano: protege la consistencia.\n\nDetalles que importan:\n- Oracle bloquea **fila por fila** (no la tabla entera): dos personas tocando filas distintas no se molestan.\n- Los lectores NO ponen locks (lección anterior: leen del undo).\n- El problema clásico: alguien modifica y **se va a almorzar sin hacer COMMIT** → todos los que necesitan esas filas quedan colgados esperando.",
+     "practica": {
+      "instruccion": "Quieres ver las sesiones bloqueadas y quién las bloquea: consulta sid, blocking_session de v$session donde blocking_session no sea nulo. (where blocking_session is not null)",
+      "respuestas": [
+       "select sid, blocking_session from v$session where blocking_session is not null"
+      ],
+      "pista": "SELECT sid, blocking_session FROM v$session WHERE blocking_session IS NOT NULL;",
+      "ok": "¡Esa es! La consulta que resuelve el \"todo está pegado\" identificando al culpable. Guárdala en tu caja de herramientas."
+     }
+    },
+    {
+     "titulo": "Deadlock y la trampa de las FK",
+     "contenido": "**Deadlock** (abrazo mortal): la sesión A espera algo que tiene B, y B espera algo que tiene A. Esperarían para siempre... pero Oracle lo detecta y mata una de las dos operaciones (error **ORA-00060**). Casi siempre es un problema de diseño de la aplicación (orden inconsistente al tomar recursos).\n\nY la trampa célebre que detectarás con un script en tu caja de herramientas: una **clave foránea SIN índice** puede hacer que modificar la tabla \"padre\" bloquee a la tabla \"hija\" COMPLETA. Es la causa real de muchos sistemas que se congelan misteriosamente. Regla profesional: **toda FK lleva índice** (¿recuerdas de 3.3 que las FK eran de los índices \"justos\"? Por esto)."
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Una sesión modificó filas y se fue a almorzar sin COMMIT. ¿Qué pasa?",
+     "opciones": [
+      "Oracle confirma solo a los 5 minutos",
+      "Quienes necesiten esas filas quedan esperando hasta que confirme, se arrepienta o lo desconecten",
+      "Nada, los locks no existen"
+     ],
+     "correcta": 1,
+     "explicacion": "El clásico de producción. V$SESSION con blocking_session encuentra al culpable."
+    },
+    {
+     "pregunta": "¿Qué hace Oracle ante un deadlock?",
+     "opciones": [
+      "Espera para siempre",
+      "Lo detecta y mata una de las dos operaciones (ORA-00060)",
+      "Apaga la base"
+     ],
+     "correcta": 1,
+     "explicacion": "Mejor sacrificar una operación que congelar dos para siempre. La causa suele ser de la aplicación."
+    },
+    {
+     "pregunta": "¿Por qué toda clave foránea debe llevar índice?",
+     "opciones": [
+      "Por estética",
+      "Porque sin índice, tocar la tabla padre puede bloquear la tabla hija completa",
+      "Para ahorrar espacio"
+     ],
+     "correcta": 1,
+     "explicacion": "FK sin índice = bloqueos masivos misteriosos. El script detector va en tu caja de herramientas."
+    }
+   ]
+  },
+  {
+   "id": "4.5",
+   "titulo": "Checkpoint Módulo 4 + el experimento del apagón",
+   "paginas": [
+    {
+     "titulo": "Los labs (con snapshot previo)",
+     "contenido": "1. **Las tres sesiones**: A modifica sin commit; B lee la misma fila (ve el valor viejo, sin esperar = undo); C intenta modificarla (espera = lock). Encuentra el bloqueo con V$SESSION.\n2. **Provoca un deadlock**: dos sesiones, dos filas, orden cruzado. Lee el ORA-00060.\n3. **Cronometra un COMMIT**: UPDATE masivo de 1 millón de filas (tarda) → COMMIT (instantáneo). Explícalo en voz alta.\n4. ⚡ **EL EXPERIMENTO ESTRELLA DEL CURSO**: con cambios confirmados recientes, apaga la VM **de golpe** (no shutdown: corta la energía de la VM). Enciende, abre el alert log, y lee la recuperación automática: verás literalmente el roll forward (redo) y el roll back (undo). Tus datos confirmados estarán intactos.\n\nDespués de ver el apagón con tus propios ojos, el Módulo de respaldos te parecerá obvio: ya entiendes el motor."
+    },
+    {
+     "titulo": "Checkpoint",
+     "contenido": "Deberías poder explicar sin mirar:\n\n✅ Por qué el COMMIT es instantáneo (la respuesta de entrevista)\n✅ Cómo sobreviven los cambios confirmados a un apagón\n✅ Los 3 usos del undo y qué es la lectura consistente\n✅ ORA-01555 en 1 minuto, para un desarrollador\n✅ Cómo encontrar al culpable de un bloqueo\n✅ Por qué toda FK lleva índice\n\nSi puedes, acabas de cruzar la frontera más importante del curso: **ya entiendes el corazón de Oracle**. Lo que viene (administración, PL/SQL, performance, respaldos) se construye sobre esto. 🏆"
+    }
+   ],
+   "quiz": [
+    {
+     "pregunta": "Tras el apagón, ¿en qué orden repara Oracle al encender?",
+     "opciones": [
+      "Primero deshace todo, luego rehace",
+      "Roll forward (re-aplica redo de lo confirmado) y luego roll back (deshace con undo lo no confirmado)",
+      "Pide un respaldo siempre"
+     ],
+     "correcta": 1,
+     "explicacion": "Rehacer lo prometido, deshacer lo pendiente. La base queda exactamente consistente."
+    },
+    {
+     "pregunta": "Sesión B LEE una fila que la sesión A está modificando sin commit. ¿Qué ve B?",
+     "opciones": [
+      "El valor nuevo de A",
+      "El valor anterior, reconstruido desde el undo, sin esperar",
+      "Un error"
+     ],
+     "correcta": 1,
+     "explicacion": "Lectura consistente: B ve la foto coherente. Nadie espera a nadie."
+    },
+    {
+     "pregunta": "¿Quién escribe los DATOS al disco y quién escribe la BITÁCORA?",
+     "opciones": [
+      "LGWR los datos, DBWn la bitácora",
+      "DBWn los datos (con calma); LGWR la bitácora (en cada commit)",
+      "SMON hace ambas"
+     ],
+     "correcta": 1,
+     "explicacion": "El reponedor y el escribano, cada uno en lo suyo. El mito #1 de los juniors, derribado."
+    },
+    {
+     "pregunta": "¿Por qué el DDL no tiene rollback (pregunta pendiente desde 1.4)?",
+     "opciones": [
+      "Porque el DDL hace commit implícito al instante: confirma todo y no deja borrador",
+      "Porque es muy rápido",
+      "Sí tiene rollback"
+     ],
+     "correcta": 0,
+     "explicacion": "CREATE/DROP/TRUNCATE confirman automáticamente. Por eso TRUNCATE es irreversible y DELETE no."
+    }
+   ]
+  }
+ ]
+}
